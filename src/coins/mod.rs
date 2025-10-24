@@ -79,6 +79,5 @@ pub struct Quote {
 pub trait PriceProvider {
     type Error;
     
-    async fn get_quote(&self, coin: Coin, currency: Currency) -> Result<Quote, Self::Error>;
-    async fn get_multiple_quotes(&self, coin: Coin, currencies: &[Currency]) -> Result<Vec<Quote>, Self::Error>;
+    async fn get_quotes(&self, coins: &[Coin], currencies: &[Currency]) -> Result<Vec<Quote>, Self::Error>;
 }

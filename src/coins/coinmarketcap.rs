@@ -53,13 +53,18 @@ impl CoinMarketCap {
         Ok(Self { api_key, client })
     }
 
-    async fn fetch_quote(&self, coin: Coin, currency: Currency) -> Result<Quote, CoinMarketCapError> {
-        let coin_id = coin.coinmarketcap_id();
-        let currency_code = currency.to_string().to_uppercase();
+    async fn fetch_quotes(&self, coins: &[Coin], currencies: &[Currency]) -> Result<Vec<Quote>, CoinMarketCapError> {
+        if coins.is_empty() || currencies.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let coin_ids: Vec<String> = coins.iter().map(|c| c.coinmarketcap_id().to_string()).collect();
+        let currency_codes: Vec<String> = currencies.iter().map(|c| c.to_string().to_uppercase()).collect();
         
         let url = format!(
             "https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest?id={}&convert={}",
-            coin_id, currency_code
+            coin_ids.join(","),
+            currency_codes.join(",")
         );
 
         let response = self.client
@@ -76,16 +81,39 @@ impl CoinMarketCap {
         let json: Value = serde_json::from_str(&body)
             .map_err(CoinMarketCapError::ParseError)?;
 
-        let price = json["data"][coin_id.to_string()]["quote"][currency_code]["price"]
-            .as_f64()
-            .ok_or_else(|| CoinMarketCapError::ApiError("Price not found in response".to_string()))?;
+        let mut quotes = Vec::new();
+        let timestamp = chrono::Utc::now();
 
-        Ok(Quote {
-            coin,
-            currency,
-            price,
-            timestamp: chrono::Utc::now(),
-        })
+        for &coin in coins {
+            let coin_id = coin.coinmarketcap_id().to_string();
+            let coin_data = &json["data"][&coin_id];
+            
+            if coin_data.is_null() {
+                return Err(CoinMarketCapError::ApiError(
+                    format!("No data found for coin {}", coin)
+                ));
+            }
+
+            for &currency in currencies {
+                let currency_code = currency.to_string().to_uppercase();
+                let quote_data = &coin_data["quote"][&currency_code];
+                
+                if let Some(price) = quote_data["price"].as_f64() {
+                    quotes.push(Quote {
+                        coin,
+                        currency,
+                        price,
+                        timestamp,
+                    });
+                } else {
+                    return Err(CoinMarketCapError::ApiError(
+                        format!("Price not found for {} in {}", coin, currency)
+                    ));
+                }
+            }
+        }
+
+        Ok(quotes)
     }
 }
 
@@ -93,19 +121,25 @@ impl CoinMarketCap {
 impl PriceProvider for CoinMarketCap {
     type Error = CoinMarketCapError;
 
-    async fn get_quote(&self, coin: Coin, currency: Currency) -> Result<Quote, Self::Error> {
-        self.fetch_quote(coin, currency).await
+    async fn get_quotes(&self, coins: &[Coin], currencies: &[Currency]) -> Result<Vec<Quote>, Self::Error> {
+        self.fetch_quotes(coins, currencies).await
+    }
+}
+
+impl CoinMarketCap {
+    // Convenience methods for common use cases
+    pub async fn get_quote(&self, coin: Coin, currency: Currency) -> Result<Quote, CoinMarketCapError> {
+        let quotes = self.get_quotes(&[coin], &[currency]).await?;
+        quotes.into_iter().next()
+            .ok_or_else(|| CoinMarketCapError::ApiError("No quote returned".to_string()))
     }
 
-    async fn get_multiple_quotes(&self, coin: Coin, currencies: &[Currency]) -> Result<Vec<Quote>, Self::Error> {
-        let mut quotes = Vec::new();
-        
-        for &currency in currencies {
-            let quote = self.fetch_quote(coin, currency).await?;
-            quotes.push(quote);
-        }
-        
-        Ok(quotes)
+    pub async fn get_coin_in_multiple_currencies(&self, coin: Coin, currencies: &[Currency]) -> Result<Vec<Quote>, CoinMarketCapError> {
+        self.get_quotes(&[coin], currencies).await
+    }
+
+    pub async fn get_multiple_coins_in_currency(&self, coins: &[Coin], currency: Currency) -> Result<Vec<Quote>, CoinMarketCapError> {
+        self.get_quotes(coins, &[currency]).await
     }
 }
 
