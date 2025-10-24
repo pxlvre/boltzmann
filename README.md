@@ -308,11 +308,6 @@ Start the server and visit `http://localhost:8080/docs` for interactive API docu
 ## Supported Chains
 
 - **Ethereum Mainnet** (Chain ID: 1)
-- **Polygon** (Chain ID: 137)
-- **Arbitrum One** (Chain ID: 42161)
-- **Optimism** (Chain ID: 10)
-- **Base** (Chain ID: 8453)
-- **Avalanche C-Chain** (Chain ID: 43114)
 
 More chains coming soon!
 
