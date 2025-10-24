@@ -35,8 +35,8 @@ impl CoinMarketCap {
     pub fn new() -> Result<Self, CoinMarketCapError> {
         dotenv().ok();
         
-        let api_key = env::var("API_KEY")
-            .map_err(|_| CoinMarketCapError::EnvError("API_KEY not set in environment".to_string()))?;
+        let api_key = env::var("COINMARKETCAP_API_KEY")
+            .map_err(|_| CoinMarketCapError::EnvError("COINMARKETCAP_API_KEY not set in environment".to_string()))?;
 
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
