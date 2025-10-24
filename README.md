@@ -26,6 +26,20 @@ Boltzmann is a REST API built with **Rust**, **axum**, and **alloy-rs** that pro
 
 ## Architecture
 
+Boltzmann is a single Rust application with a modular design:
+
+```
+boltzmann/
+├── src/
+│   └── main.rs                  # Main application
+├── assets/                      # Project assets
+├── Cargo.toml                   # Package configuration
+├── .env                         # Environment variables
+└── README.md
+```
+
+### System Architecture
+
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Client Apps   │    │   Boltzmann     │    │  External APIs  │
@@ -256,10 +270,27 @@ curl http://localhost:8080/v1/gas/current?chain_id=1
 
 ## Development
 
+### Application Structure
+
+The application is organized with modular components:
+
+- **Gas Price Oracle**: Fetches current gas prices from multiple sources
+- **Transaction Simulation**: Simulates transaction costs across different scenarios
+- **Fee Calculation**: Implements EIP-1559, EIP-3198, and EIP-4844 fee structures
+- **Price Conversion**: Integrates with CoinGecko/CoinMarketCap for fiat conversion
+- **REST API**: Provides HTTP endpoints for all functionality
+- **Subscription System**: Real-time monitoring and webhooks
+
 ### Running Tests
 
 ```bash
 cargo test
+```
+
+### Building
+
+```bash
+cargo build
 ```
 
 ### API Documentation
