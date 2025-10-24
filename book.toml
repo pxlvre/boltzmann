@@ -1,0 +1,22 @@
+[book]
+title = "Boltzmann Documentation"
+description = "Gas and fee analytics API for EVM chains"
+authors = ["pxlvre <vidalplr@outlook.com>"]
+language = "en"
+multilingual = false
+src = "docs/src"
+
+[build]
+build-dir = "docs/book"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/pxlvre/boltzmann"
+git-repository-icon = "fa-github"
+
+[output.html.search]
+enable = true
+
+[output.html.print]
+enable = true

@@ -1,7 +1,7 @@
 // Boltzmann API server
 
 mod coins;
-use coins::{Coin, Currency};
+use coins::{Coin, Currency, PriceProvider};
 use coins::coinmarketcap::CoinMarketCap;
 use coins::coingecko::CoinGecko;
 
@@ -17,14 +17,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Try CoinMarketCap
     match CoinMarketCap::new() {
         Ok(cmc_provider) => {
-            match cmc_provider.get_quote(Coin::ETH, Currency::USD).await {
-                Ok(quote) => {
-                    println!("📊 CoinMarketCap: 1 {} = {}{:.2}", 
-                        quote.coin, 
-                        quote.currency.symbol(), 
-                        quote.price
-                    );
-                    println!("   Timestamp: {}", quote.timestamp.format("%Y-%m-%d %H:%M:%S UTC"));
+            match cmc_provider.get_quotes(Coin::ETH, &[Currency::USD]).await {
+                Ok(quotes) => {
+                    if let Some(quote) = quotes.first() {
+                        println!("📊 CoinMarketCap: 1 {} = {}{:.2}", 
+                            quote.coin, 
+                            quote.currency.symbol(), 
+                            quote.price
+                        );
+                        println!("   Timestamp: {}", quote.timestamp.format("%Y-%m-%d %H:%M:%S UTC"));
+                    }
                 }
                 Err(e) => {
                     eprintln!("❌ CoinMarketCap failed: {}", e);
@@ -41,14 +43,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Try CoinGecko
     match CoinGecko::new() {
         Ok(cg_provider) => {
-            match cg_provider.get_quote(Coin::ETH, Currency::USD).await {
-                Ok(quote) => {
-                    println!("🦎 CoinGecko: 1 {} = {}{:.2}", 
-                        quote.coin, 
-                        quote.currency.symbol(), 
-                        quote.price
-                    );
-                    println!("   Timestamp: {}", quote.timestamp.format("%Y-%m-%d %H:%M:%S UTC"));
+            match cg_provider.get_quotes(Coin::ETH, &[Currency::USD]).await {
+                Ok(quotes) => {
+                    if let Some(quote) = quotes.first() {
+                        println!("🦎 CoinGecko: 1 {} = {}{:.2}", 
+                            quote.coin, 
+                            quote.currency.symbol(), 
+                            quote.price
+                        );
+                        println!("   Timestamp: {}", quote.timestamp.format("%Y-%m-%d %H:%M:%S UTC"));
+                    }
                 }
                 Err(e) => {
                     eprintln!("❌ CoinGecko failed: {}", e);
