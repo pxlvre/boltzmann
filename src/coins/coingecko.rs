@@ -121,6 +121,11 @@ impl CoinGecko {
             Currency::USD => "usd",
             Currency::EUR => "eur",
             Currency::CHF => "chf",
+            Currency::CNY => "cny",
+            Currency::GBP => "gbp",
+            Currency::JPY => "jpy",
+            Currency::CAD => "cad",
+            Currency::AUD => "aud",
         }
     }
 
@@ -163,9 +168,14 @@ impl CoinGecko {
             currency_codes.join(",")
         );
 
-        let response = self
-            .client
-            .get(&url)
+        let mut request = self.client.get(&url);
+        
+        // Add API key header if available
+        if let Some(ref api_key) = self.api_key {
+            request = request.header("x-cg-demo-api-key", api_key);
+        }
+        
+        let response = request
             .send()
             .await
             .map_err(CoinGeckoError::RequestError)?;

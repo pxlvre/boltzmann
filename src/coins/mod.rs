@@ -39,6 +39,16 @@ pub enum Currency {
     EUR,
     /// Swiss Franc  
     CHF,
+    /// Chinese Yuan
+    CNY,
+    /// British Pound Sterling
+    GBP,
+    /// Japanese Yen
+    JPY,
+    /// Canadian Dollar
+    CAD,
+    /// Australian Dollar
+    AUD,
 }
 
 /// Supported cryptocurrencies.
@@ -57,6 +67,11 @@ impl fmt::Display for Currency {
             Currency::USD => write!(f, "USD"),
             Currency::EUR => write!(f, "EUR"),
             Currency::CHF => write!(f, "CHF"),
+            Currency::CNY => write!(f, "CNY"),
+            Currency::GBP => write!(f, "GBP"),
+            Currency::JPY => write!(f, "JPY"),
+            Currency::CAD => write!(f, "CAD"),
+            Currency::AUD => write!(f, "AUD"),
         }
     }
 }
@@ -85,6 +100,11 @@ impl Currency {
             Currency::USD => "$",
             Currency::EUR => "€",
             Currency::CHF => "CHF",
+            Currency::CNY => "¥",
+            Currency::GBP => "£",
+            Currency::JPY => "¥",
+            Currency::CAD => "C$",
+            Currency::AUD => "A$",
         }
     }
 
@@ -92,7 +112,11 @@ impl Currency {
     ///
     /// This is useful for fetching prices in all available currencies.
     pub fn all() -> &'static [Currency] {
-        &[Currency::USD, Currency::EUR, Currency::CHF]
+        &[
+            Currency::USD, Currency::EUR, Currency::CHF,
+            Currency::CNY, Currency::GBP, Currency::JPY,
+            Currency::CAD, Currency::AUD
+        ]
     }
 }
 

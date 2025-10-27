@@ -68,6 +68,7 @@ impl std::error::Error for CoinMarketCapError {}
 /// # }
 /// ```
 pub struct CoinMarketCap {
+    #[allow(dead_code)] // Used indirectly via client default headers
     api_key: String,
     client: Client,
 }

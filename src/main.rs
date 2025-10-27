@@ -2,15 +2,15 @@
 
 use axum::{Router, routing::get, Json, response::IntoResponse, http::StatusCode};
 use axum::extract::Query;
-use std::net::SocketAddr;
-use alloy_primitives::uint;
-use async_trait::async_trait;
-use axum::serve::Serve;
 use serde::Deserialize;
 use serde_json::Value;
 
 mod coins;
-use crate::coins::Quote;
+mod gas;
+
+use crate::gas::price::{GasOracle, GasQuote, GasOracleSource};
+use crate::gas::price::etherscan::EtherscanGasOracle;
+use crate::gas::price::alloy::AlloyGasOracle;
 use coins::coingecko::CoinGecko;
 use coins::coinmarketcap::CoinMarketCap;
 use coins::{Coin, Currency, PriceProvider};
@@ -24,12 +24,22 @@ struct QueryParams {
     currency: Currency,
 }
 
+#[derive(Deserialize)]
+struct GasPriceParams {
+    #[serde(default = "default_gas_provider")]
+    provider: GasOracleSource,
+}
+
 fn default_amount() -> usize {
     1
 }
 
 fn default_currency() -> Currency {
     USD
+}
+
+fn default_gas_provider() -> GasOracleSource {
+    GasOracleSource::Etherscan
 }
 
 async fn get_quotes(Query(params): Query<QueryParams>) -> impl IntoResponse {
@@ -106,13 +116,76 @@ async fn get_quotes(Query(params): Query<QueryParams>) -> impl IntoResponse {
     result
 }
 
+async fn get_gas_prices(Query(params): Query<GasPriceParams>) -> impl IntoResponse {
+    println!("⛽ Boltzmann Gas Price Fetcher");
+    println!("Fetching gas prices from {:?} provider...\n", params.provider);
+
+    let gas_quote = match params.provider {
+        GasOracleSource::Etherscan => {
+            match EtherscanGasOracle::new() {
+                Ok(oracle) => {
+                    match oracle.get_gas_prices().await {
+                        Ok(gas_price) => Some(GasQuote {
+                            gas_price,
+                            provider: GasOracleSource::Etherscan,
+                        }),
+                        Err(e) => {
+                            eprintln!("❌ Etherscan gas oracle failed: {}", e);
+                            None
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ Etherscan gas oracle initialization failed: {}", e);
+                    None
+                }
+            }
+        }
+        GasOracleSource::Alloy => {
+            match AlloyGasOracle::new() {
+                Ok(oracle) => {
+                    match oracle.get_gas_prices().await {
+                        Ok(gas_price) => Some(GasQuote {
+                            gas_price,
+                            provider: GasOracleSource::Alloy,
+                        }),
+                        Err(e) => {
+                            eprintln!("❌ Alloy gas oracle failed: {}", e);
+                            None
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ Alloy gas oracle initialization failed: {}", e);
+                    None
+                }
+            }
+        }
+    };
+
+    println!("\n✅ Gas price fetching complete!");
+
+    match gas_quote {
+        Some(quote) => (StatusCode::OK, Json(serde_json::to_value(quote).unwrap_or_default())),
+        None => {
+            let error_json = serde_json::json!({"error": "Failed to fetch gas prices from provider"});
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(error_json))
+        }
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load environment variables from .env file
+    dotenvy::dotenv().ok();
+    
     // Initialize tracing for logging
     tracing_subscriber::fmt::init();
 
-    let app = Router::new().route("/quotes", get(get_quotes));
+    let app = Router::new()
+        .route("/quotes", get(get_quotes))
+        .route("/gas-price", get(get_gas_prices));
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
 
