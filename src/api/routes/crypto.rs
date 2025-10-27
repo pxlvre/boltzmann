@@ -7,6 +7,7 @@ use axum::{extract::{Query, State}, response::IntoResponse, http::StatusCode, Js
 use serde::Deserialize;
 use serde_json::Value;
 use utoipa::IntoParams;
+use tracing::{info, warn, error};
 
 use crate::core::config::AppState;
 use crate::domains::crypto::{Coin, Currency, PriceProvider, Quote};
@@ -50,8 +51,7 @@ pub async fn get_crypto_prices(
     State(app_state): State<AppState>,
     Query(params): Query<QuoteQueryParams>,
 ) -> impl IntoResponse {
-    println!("🚀 Boltzmann Price Fetcher");
-    println!("Fetching ETH price from multiple providers...\n");
+    info!("💰 Fetching cryptocurrency prices for {} {} in {}", params.amount, Coin::ETH, params.currency);
 
     let mut quotes = Vec::new();
 
@@ -62,31 +62,22 @@ pub async fn get_crypto_prices(
             Ok(cmc_quotes) => {
                 if let Some(quote) = cmc_quotes.first() {
                     quotes.push(quote.with_amount(params.amount as f64));
-                    println!(
-                        "📊 CoinMarketCap: 1 {} = {}{:.2}",
-                        quote.coin,
-                        quote.currency.symbol(),
-                        quote.price
-                    );
-                    println!(
-                        "   Timestamp: {}",
-                        quote.timestamp.format("%Y-%m-%d %H:%M:%S UTC")
-                    );
+                    info!("📊 CoinMarketCap: {} {} = {}{:.2} at {}", 
+                        quote.coin, 1, quote.currency.symbol(), quote.price, quote.timestamp);
                 }
             }
             Err(e) => {
-                eprintln!("❌ CoinMarketCap failed: {}", e);
+                warn!("CoinMarketCap API failed: {}", e);
             }
         },
             Err(e) => {
-                eprintln!("❌ CoinMarketCap initialization failed: {}", e);
+                error!("CoinMarketCap initialization failed: {}", e);
             }
         }
     } else {
-        eprintln!("❌ CoinMarketCap API key not configured");
+        info!("CoinMarketCap API key not configured, skipping provider");
     }
 
-    println!();
 
     // Try CoinGecko
     match CoinGecko::new(app_state.config.coingecko_api_key.clone()) {
@@ -94,28 +85,20 @@ pub async fn get_crypto_prices(
             Ok(cg_quotes) => {
                 if let Some(quote) = cg_quotes.first() {
                     quotes.push(quote.with_amount(params.amount as f64));
-                    println!(
-                        "🦎 CoinGecko: 1 {} = {}{:.2}",
-                        quote.coin,
-                        quote.currency.symbol(),
-                        quote.price
-                    );
-                    println!(
-                        "   Timestamp: {}",
-                        quote.timestamp.format("%Y-%m-%d %H:%M:%S UTC")
-                    );
+                    info!("🦎 CoinGecko: {} {} = {}{:.2} at {}", 
+                        quote.coin, 1, quote.currency.symbol(), quote.price, quote.timestamp);
                 }
             }
             Err(e) => {
-                eprintln!("❌ CoinGecko failed: {}", e);
+                warn!("CoinGecko API failed: {}", e);
             }
         },
         Err(e) => {
-            eprintln!("❌ CoinGecko initialization failed: {}", e);
+            error!("CoinGecko initialization failed: {}", e);
         }
     }
 
-    println!("\n✅ Price fetching complete!");
+    info!("Price fetching completed. Retrieved {} quotes", quotes.len());
 
     let result: (StatusCode, Json<Value>) = if quotes.is_empty() {
         let error_json = serde_json::json!({"error": "No quotes available from any provider"});

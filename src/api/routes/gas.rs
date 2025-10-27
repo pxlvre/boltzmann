@@ -6,6 +6,7 @@
 use axum::{extract::{Query, State}, response::IntoResponse, http::StatusCode, Json};
 use serde::Deserialize;
 use utoipa::IntoParams;
+use tracing::{info, warn, error};
 
 use crate::core::config::AppState;
 use crate::domains::gas::price::{GasOracle, GasQuote, GasOracleSource};
@@ -42,8 +43,7 @@ pub async fn get_gas_estimates(
     State(app_state): State<AppState>,
     Query(params): Query<GasPriceQueryParams>,
 ) -> impl IntoResponse {
-    println!("⛽ Boltzmann Gas Price Fetcher");
-    println!("Fetching gas prices from {:?} provider...\n", params.provider);
+    info!("⛽ Fetching gas prices from {:?} provider", params.provider);
 
     let gas_quote = match params.provider {
         GasOracleSource::Etherscan => {
@@ -57,19 +57,19 @@ pub async fn get_gas_estimates(
                                     provider: GasOracleSource::Etherscan,
                                 }),
                                 Err(e) => {
-                                    eprintln!("❌ Etherscan gas oracle failed: {}", e);
+                                    warn!("Etherscan gas oracle failed: {}", e);
                                     None
                                 }
                             }
                         }
                         Err(e) => {
-                            eprintln!("❌ Etherscan gas oracle initialization failed: {}", e);
+                            error!("Etherscan gas oracle initialization failed: {}", e);
                             None
                         }
                     }
                 }
                 None => {
-                    eprintln!("❌ Etherscan API key not configured");
+                    info!("Etherscan API key not configured, provider unavailable");
                     None
                 }
             }
@@ -85,26 +85,26 @@ pub async fn get_gas_estimates(
                                     provider: GasOracleSource::Alloy,
                                 }),
                                 Err(e) => {
-                                    eprintln!("❌ Alloy gas oracle failed: {}", e);
+                                    warn!("Alloy gas oracle failed: {}", e);
                                     None
                                 }
                             }
                         }
                         Err(e) => {
-                            eprintln!("❌ Alloy gas oracle initialization failed: {}", e);
+                            error!("Alloy gas oracle initialization failed: {}", e);
                             None
                         }
                     }
                 }
                 None => {
-                    eprintln!("❌ Ethereum RPC URL not configured");
+                    error!("Ethereum RPC URL not configured, Alloy provider unavailable");
                     None
                 }
             }
         }
     };
 
-    println!("\n✅ Gas price fetching complete!");
+    info!("Gas price fetching completed. Success: {}", gas_quote.is_some());
 
     match gas_quote {
         Some(quote) => (StatusCode::OK, Json(serde_json::to_value(quote).unwrap_or_default())),

@@ -12,7 +12,7 @@ use crate::domains::gas::price::{GasQuote, GasPrice, GasOracleSource};
     paths(
         crate::api::routes::crypto::get_crypto_prices,
         crate::api::routes::gas::get_gas_estimates,
-        crate::api::routes::health_check,
+        crate::api::routes::health::health_check,
     ),
     components(
         schemas(

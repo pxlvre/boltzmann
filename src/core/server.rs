@@ -5,16 +5,17 @@
 
 use std::error::Error;
 use tokio::net::TcpListener;
-use tracing_subscriber;
+use tracing::{info, error};
 
 use crate::core::config::{Config, AppState};
 use crate::api::routes;
+use crate::infrastructure::logging;
 
 /// Initialize and start the Boltzmann API server.
 ///
 /// This function handles the complete server lifecycle:
-/// 1. Load configuration from environment
-/// 2. Initialize tracing for logging
+/// 1. Initialize structured logging and tracing
+/// 2. Load configuration from environment
 /// 3. Create application state
 /// 4. Set up routes with middleware
 /// 5. Start the server
@@ -37,23 +38,54 @@ use crate::api::routes;
 /// }
 /// ```
 pub async fn start() -> Result<(), Box<dyn Error>> {
-    // Initialize tracing for logging
-    tracing_subscriber::fmt::init();
+    // Initialize structured logging and tracing
+    logging::init_default_tracing()
+        .map_err(|e| {
+            eprintln!("Failed to initialize logging: {}", e);
+            e
+        })?;
+    
+    info!("🔧 Initializing Boltzmann API server");
     
     // Load configuration from environment
-    let config = Config::from_env()?;
+    let config = Config::from_env().map_err(|e| {
+        error!("Failed to load configuration: {}", e);
+        e
+    })?;
+    
     let app_state = AppState::new(config);
+    info!("✅ Configuration loaded successfully");
+    
+    // Log configuration details
+    info!("Configuration details:");
+    info!("  Host: {}", app_state.config.host);
+    info!("  Port: {}", app_state.config.port);
+    info!("  CoinMarketCap API: {}", if app_state.config.coinmarketcap_api_key.is_some() { "✅" } else { "❌" });
+    info!("  CoinGecko API: {}", if app_state.config.coingecko_api_key.is_some() { "✅" } else { "❌" });
+    info!("  Etherscan API: {}", if app_state.config.etherscan_api_key.is_some() { "✅" } else { "❌" });
+    info!("  Ethereum RPC: {}", if app_state.config.ethereum_rpc_url.is_some() { "✅" } else { "❌" });
     
     // Create router with all routes configured
     let app = routes::create_router(app_state.clone());
+    info!("🔗 Routes configured successfully");
 
     // Determine bind address from configuration
     let bind_addr = format!("{}:{}", app_state.config.host, app_state.config.port);
-    println!("🚀 Starting Boltzmann API server on {}", bind_addr);
+    info!("🚀 Starting Boltzmann API server on {}", bind_addr);
     
     // Bind to the address and start serving
-    let listener = TcpListener::bind(&bind_addr).await?;
-    axum::serve(listener, app.into_make_service()).await?;
+    let listener = TcpListener::bind(&bind_addr).await.map_err(|e| {
+        error!("Failed to bind to address {}: {}", bind_addr, e);
+        e
+    })?;
+    
+    info!("🌐 Server listening on {}", bind_addr);
+    info!("📚 Swagger UI available at: http://{}/docs", bind_addr);
+    
+    axum::serve(listener, app.into_make_service()).await.map_err(|e| {
+        error!("Server error: {}", e);
+        e
+    })?;
 
     Ok(())
 }

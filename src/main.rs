@@ -11,6 +11,7 @@
 mod domains;
 mod api;
 mod core;
+mod infrastructure;
 
 #[cfg(not(target_arch = "wasm32"))]
 #[tokio::main]
