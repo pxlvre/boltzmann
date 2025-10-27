@@ -53,8 +53,8 @@ boltzmann/
 │   ├── main.rs                 # Application entry point
 │   └── lib.rs                  # Library root
 ├── assets/                     # Project assets
-├── Dockerfile                  # Docker configuration
-├── docker-compose.yml          # Docker Compose setup
+├── Dockerfile                  # Container configuration
+├── docker-compose.yml          # Container Compose setup
 ├── Cargo.toml                  # Package configuration
 ├── .env                        # Environment variables
 └── README.md
@@ -126,10 +126,11 @@ The following advanced features are planned for future releases:
 
 ### Prerequisites
 
-- **Docker & Docker Compose** (recommended)
+- **Podman & Podman Compose** (recommended)
+- **OR** Docker & Docker Compose (alternative)
 - **OR** Rust 1.75+ for local development
 
-### 🐳 Quick Start with Docker (Recommended)
+### 🐳 Quick Start with Podman (Recommended)
 
 ```bash
 # Clone the repository
@@ -142,8 +143,8 @@ cp .env.example .env
 # Edit .env with your API keys (see Configuration section below)
 vim .env
 
-# Start with Docker Compose
-docker-compose up -d
+# Start with Podman Compose
+podman-compose up -d
 
 # Check if it's running
 curl http://localhost:3000/api/v1/health
@@ -167,13 +168,39 @@ cargo build --release
 cargo run
 ```
 
-### 🐳 Docker Commands
+### 🐳 Container Commands
+
+#### Podman (Recommended)
+
+```bash
+# Build the image
+podman build -t boltzmann-api .
+
+# Run with Podman Compose (recommended)
+podman-compose up -d
+
+# Run standalone container
+podman run -p 3000:3000 \
+  -e COINMARKETCAP_API_KEY=your_key \
+  -e COINGECKO_API_KEY=your_key \
+  -e ETHERSCAN_API_KEY=your_key \
+  -e ETHEREUM_RPC_URL=your_rpc_url \
+  boltzmann-api
+
+# View logs
+podman-compose logs -f boltzmann-api
+
+# Stop services
+podman-compose down
+```
+
+#### Docker (Alternative)
 
 ```bash
 # Build the image
 docker build -t boltzmann-api .
 
-# Run with Docker Compose (recommended)
+# Run with Docker Compose
 docker-compose up -d
 
 # Run standalone container
