@@ -13,18 +13,18 @@
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let provider = CoinMarketCap::new()?;
 //! let quotes = provider.get_quotes(Coin::ETH, &[Currency::USD]).await?;
-//! 
+//!
 //! println!("ETH price: ${:.2}", quotes[0].price);
 //! # Ok(())
 //! # }
 //! ```
 
-use std::env;
+use crate::coins::{Coin, Currency, PriceProvider, Quote, QuotePerAmount, ProviderSource};
+use async_trait::async_trait;
 use dotenvy::dotenv;
 use reqwest::Client;
 use serde_json::Value;
-use async_trait::async_trait;
-use crate::coins::{PriceProvider, Quote, Coin, Currency};
+use std::env;
 
 /// Error types that can occur when using the CoinMarketCap provider.
 #[derive(Debug)]
@@ -95,15 +95,16 @@ impl CoinMarketCap {
     /// ```
     pub fn new() -> Result<Self, CoinMarketCapError> {
         dotenv().ok();
-        
-        let api_key = env::var("COINMARKETCAP_API_KEY")
-            .map_err(|_| CoinMarketCapError::EnvError("COINMARKETCAP_API_KEY not set in environment".to_string()))?;
+
+        let api_key = env::var("COINMARKETCAP_API_KEY").map_err(|_| {
+            CoinMarketCapError::EnvError("COINMARKETCAP_API_KEY not set in environment".to_string())
+        })?;
 
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
-            "X-CMC_PRO_API_KEY", 
+            "X-CMC_PRO_API_KEY",
             reqwest::header::HeaderValue::from_str(&api_key)
-                .map_err(|_| CoinMarketCapError::EnvError("Invalid API key format".to_string()))?
+                .map_err(|_| CoinMarketCapError::EnvError("Invalid API key format".to_string()))?,
         );
 
         let client = Client::builder()
@@ -132,21 +133,29 @@ impl CoinMarketCap {
     ///
     /// Returns various `CoinMarketCapError` types if the request fails or
     /// the response cannot be parsed.
-    async fn fetch_quotes(&self, coin: Coin, currencies: &[Currency]) -> Result<Vec<Quote>, CoinMarketCapError> {
+    async fn fetch_quotes(
+        &self,
+        coin: Coin,
+        currencies: &[Currency],
+    ) -> Result<Vec<Quote>, CoinMarketCapError> {
         if currencies.is_empty() {
             return Ok(Vec::new());
         }
 
         let coin_id = coin.coinmarketcap_id();
-        let currency_codes: Vec<String> = currencies.iter().map(|c| c.to_string().to_uppercase()).collect();
-        
+        let currency_codes: Vec<String> = currencies
+            .iter()
+            .map(|c| c.to_string().to_uppercase())
+            .collect();
+
         let url = format!(
             "https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest?id={}&convert={}",
             coin_id,
             currency_codes.join(",")
         );
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .send()
             .await
@@ -157,36 +166,42 @@ impl CoinMarketCap {
             .await
             .map_err(CoinMarketCapError::RequestError)?;
 
-        let json: Value = serde_json::from_str(&body)
-            .map_err(CoinMarketCapError::ParseError)?;
+        let json: Value = serde_json::from_str(&body).map_err(CoinMarketCapError::ParseError)?;
 
         let mut quotes = Vec::new();
         let timestamp = chrono::Utc::now();
 
         let coin_id_str = coin_id.to_string();
         let coin_data = &json["data"][&coin_id_str];
-        
+
         if coin_data.is_null() {
-            return Err(CoinMarketCapError::ApiError(
-                format!("No data found for coin {}", coin)
-            ));
+            return Err(CoinMarketCapError::ApiError(format!(
+                "No data found for coin {}",
+                coin
+            )));
         }
 
         for &currency in currencies {
             let currency_code = currency.to_string().to_uppercase();
             let quote_data = &coin_data["quote"][&currency_code];
-            
+
             if let Some(price) = quote_data["price"].as_f64() {
                 quotes.push(Quote {
                     coin,
                     currency,
                     price,
+                    provider: ProviderSource::CoinMarketCap,
                     timestamp,
+                    quote_per_amount: QuotePerAmount {
+                        amount: 1.0,
+                        total_price: price,
+                    },
                 });
             } else {
-                return Err(CoinMarketCapError::ApiError(
-                    format!("Price not found for {} in {}", coin, currency)
-                ));
+                return Err(CoinMarketCapError::ApiError(format!(
+                    "Price not found for {} in {}",
+                    coin, currency
+                )));
             }
         }
 
@@ -198,22 +213,11 @@ impl CoinMarketCap {
 impl PriceProvider for CoinMarketCap {
     type Error = CoinMarketCapError;
 
-    async fn get_quotes(&self, coin: Coin, currencies: &[Currency]) -> Result<Vec<Quote>, Self::Error> {
+    async fn get_quotes(
+        &self,
+        coin: Coin,
+        currencies: &[Currency],
+    ) -> Result<Vec<Quote>, Self::Error> {
         self.fetch_quotes(coin, currencies).await
     }
-}
-
-// Legacy function for backward compatibility
-pub async fn get_quote() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let provider = CoinMarketCap::new()?;
-    let quote = provider.get_quote(Coin::ETH, Currency::USD).await?;
-    
-    println!("1 {} is {}{}", quote.coin, quote.currency.symbol(), quote.price);
-    
-    Ok(serde_json::json!({
-        "coin": quote.coin,
-        "currency": quote.currency,
-        "price": quote.price,
-        "timestamp": quote.timestamp
-    }))
 }

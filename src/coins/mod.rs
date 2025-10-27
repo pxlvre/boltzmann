@@ -12,7 +12,7 @@
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let provider = CoinMarketCap::new()?;
 //! let quotes = provider.get_quotes(Coin::ETH, &[Currency::USD, Currency::EUR]).await?;
-//! 
+//!
 //! for quote in quotes {
 //!     println!("{} = {}{}", quote.coin, quote.currency.symbol(), quote.price);
 //! }
@@ -20,12 +20,12 @@
 //! # }
 //! ```
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use async_trait::async_trait;
 
-pub mod coinmarketcap;
 pub mod coingecko;
+pub mod coinmarketcap;
 
 /// Supported fiat currencies for price conversion.
 ///
@@ -48,7 +48,7 @@ pub enum Currency {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Coin {
     /// Ethereum
-    ETH
+    ETH,
 }
 
 impl fmt::Display for Currency {
@@ -64,7 +64,7 @@ impl fmt::Display for Currency {
 impl fmt::Display for Coin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Coin::ETH => write!(f, "ETH")
+            Coin::ETH => write!(f, "ETH"),
         }
     }
 }
@@ -76,7 +76,7 @@ impl Currency {
     ///
     /// ```rust
     /// use boltzmann::coins::Currency;
-    /// 
+    ///
     /// assert_eq!(Currency::USD.symbol(), "$");
     /// assert_eq!(Currency::EUR.symbol(), "€");
     /// ```
@@ -123,19 +123,83 @@ impl Coin {
     }
 }
 
+/// Information about a specific amount and its total price
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuotePerAmount {
+    /// The amount of cryptocurrency
+    pub amount: f64,
+    /// The total price for this amount
+    pub total_price: f64,
+}
+
+/// Supported price provider sources
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ProviderSource {
+    #[serde(rename = "coinmarketcap")]
+    CoinMarketCap,
+    #[serde(rename = "coingecko")]
+    CoinGecko,
+}
+
 /// A cryptocurrency price quote at a specific point in time.
 ///
-/// Contains the coin, currency, price, and timestamp for when the quote was fetched.
+/// Contains the coin, currency, unit price, and quote information for a specific amount.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Quote {
     /// The cryptocurrency being quoted
     pub coin: Coin,
     /// The fiat currency the price is denominated in
     pub currency: Currency,
-    /// The price of the cryptocurrency in the specified currency
+    /// The price per single unit of the cryptocurrency
     pub price: f64,
+    /// The provider that supplied this quote
+    pub provider: ProviderSource,
     /// When this quote was fetched
     pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// Quote information for a specific amount
+    pub quote_per_amount: QuotePerAmount,
+}
+
+impl Quote {
+    /// Creates a new quote with quote information for the given amount.
+    ///
+    /// This is useful for calculating the total value of a specific amount
+    /// of cryptocurrency at the current market price.
+    ///
+    /// # Arguments
+    ///
+    /// * `amount` - The amount of cryptocurrency to calculate the value for
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use boltzmann::coins::{Quote, QuotePerAmount, Coin, Currency};
+    /// use chrono::Utc;
+    ///
+    /// let quote = Quote {
+    ///     coin: Coin::ETH,
+    ///     currency: Currency::USD,
+    ///     price: 2000.0,
+    ///     timestamp: Utc::now(),
+    ///     quote_per_amount: QuotePerAmount { amount: 1.0, total_price: 2000.0 },
+    /// };
+    ///
+    /// let total_value = quote.with_amount(2.5);
+    /// assert_eq!(total_value.quote_per_amount.total_price, 5000.0);
+    /// ```
+    pub fn with_amount(&self, amount: f64) -> Self {
+        Self {
+            coin: self.coin,
+            currency: self.currency,
+            price: self.price,
+            provider: self.provider.clone(),
+            timestamp: self.timestamp,
+            quote_per_amount: QuotePerAmount {
+                amount,
+                total_price: self.price * amount,
+            },
+        }
+    }
 }
 
 /// Trait for cryptocurrency price providers.
@@ -152,10 +216,10 @@ pub struct Quote {
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let provider = CoinMarketCap::new()?;
-/// 
+///
 /// // Fetch ETH price in USD and EUR
 /// let quotes = provider.get_quotes(Coin::ETH, &[Currency::USD, Currency::EUR]).await?;
-/// 
+///
 /// for quote in quotes {
 ///     println!("{} = {}{:.2}", quote.coin, quote.currency.symbol(), quote.price);
 /// }
@@ -166,7 +230,7 @@ pub struct Quote {
 pub trait PriceProvider {
     /// The error type returned by this provider
     type Error;
-    
+
     /// Fetches prices for a single coin in multiple currencies.
     ///
     /// This method is optimized to make a single API call when fetching
@@ -186,5 +250,9 @@ pub trait PriceProvider {
     ///
     /// Returns `Self::Error` if the API request fails, the response cannot be parsed,
     /// or the requested coin/currency combination is not supported.
-    async fn get_quotes(&self, coin: Coin, currencies: &[Currency]) -> Result<Vec<Quote>, Self::Error>;
+    async fn get_quotes(
+        &self,
+        coin: Coin,
+        currencies: &[Currency],
+    ) -> Result<Vec<Quote>, Self::Error>;
 }

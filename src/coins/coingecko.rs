@@ -13,16 +13,16 @@
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let provider = CoinGecko::new()?;
 //! let quotes = provider.get_quotes(Coin::ETH, &[Currency::USD]).await?;
-//! 
+//!
 //! println!("ETH price: ${:.2}", quotes[0].price);
 //! # Ok(())
 //! # }
 //! ```
 
+use crate::coins::{Coin, Currency, PriceProvider, Quote, QuotePerAmount, ProviderSource};
+use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::Value;
-use async_trait::async_trait;
-use crate::coins::{PriceProvider, Quote, Coin, Currency};
 
 /// Error types that can occur when using the CoinGecko provider.
 #[derive(Debug)]
@@ -95,13 +95,13 @@ impl CoinGecko {
     /// ```
     pub fn new() -> Result<Self, CoinGeckoError> {
         let api_key = std::env::var("COINGECKO_API_KEY").ok();
-        
+
         let mut headers = reqwest::header::HeaderMap::new();
         if let Some(ref key) = api_key {
             headers.insert(
                 "x-cg-demo-api-key",
                 reqwest::header::HeaderValue::from_str(key)
-                    .map_err(|_| CoinGeckoError::ApiError("Invalid API key format".to_string()))?
+                    .map_err(|_| CoinGeckoError::ApiError("Invalid API key format".to_string()))?,
             );
         }
 
@@ -119,7 +119,7 @@ impl CoinGecko {
     fn currency_to_coingecko_id(&self, currency: Currency) -> &'static str {
         match currency {
             Currency::USD => "usd",
-            Currency::EUR => "eur", 
+            Currency::EUR => "eur",
             Currency::CHF => "chf",
         }
     }
@@ -142,23 +142,29 @@ impl CoinGecko {
     ///
     /// Returns various `CoinGeckoError` types if the request fails,
     /// rate limit is exceeded, or the response cannot be parsed.
-    async fn fetch_quotes(&self, coin: Coin, currencies: &[Currency]) -> Result<Vec<Quote>, CoinGeckoError> {
+    async fn fetch_quotes(
+        &self,
+        coin: Coin,
+        currencies: &[Currency],
+    ) -> Result<Vec<Quote>, CoinGeckoError> {
         if currencies.is_empty() {
             return Ok(Vec::new());
         }
 
         let coin_id = coin.coingecko_id();
-        let currency_codes: Vec<String> = currencies.iter()
+        let currency_codes: Vec<String> = currencies
+            .iter()
             .map(|c| self.currency_to_coingecko_id(*c).to_string())
             .collect();
-        
+
         let url = format!(
             "https://api.coingecko.com/api/v3/simple/price?ids={}&vs_currencies={}&include_last_updated_at=true",
             coin_id,
             currency_codes.join(",")
         );
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .send()
             .await
@@ -173,34 +179,40 @@ impl CoinGecko {
             .await
             .map_err(CoinGeckoError::RequestError)?;
 
-        let json: Value = serde_json::from_str(&body)
-            .map_err(CoinGeckoError::ParseError)?;
+        let json: Value = serde_json::from_str(&body).map_err(CoinGeckoError::ParseError)?;
 
         let mut quotes = Vec::new();
         let timestamp = chrono::Utc::now();
 
         let coin_data = &json[coin_id];
-        
+
         if coin_data.is_null() {
-            return Err(CoinGeckoError::ApiError(
-                format!("No data found for coin {}", coin)
-            ));
+            return Err(CoinGeckoError::ApiError(format!(
+                "No data found for coin {}",
+                coin
+            )));
         }
 
         for &currency in currencies {
             let currency_code = self.currency_to_coingecko_id(currency);
-            
+
             if let Some(price) = coin_data[currency_code].as_f64() {
                 quotes.push(Quote {
                     coin,
                     currency,
                     price,
+                    provider: ProviderSource::CoinGecko,
                     timestamp,
+                    quote_per_amount: QuotePerAmount {
+                        amount: 1.0,
+                        total_price: price,
+                    },
                 });
             } else {
-                return Err(CoinGeckoError::ApiError(
-                    format!("Price not found for {} in {}", coin, currency)
-                ));
+                return Err(CoinGeckoError::ApiError(format!(
+                    "Price not found for {} in {}",
+                    coin, currency
+                )));
             }
         }
 
@@ -212,7 +224,11 @@ impl CoinGecko {
 impl PriceProvider for CoinGecko {
     type Error = CoinGeckoError;
 
-    async fn get_quotes(&self, coin: Coin, currencies: &[Currency]) -> Result<Vec<Quote>, Self::Error> {
+    async fn get_quotes(
+        &self,
+        coin: Coin,
+        currencies: &[Currency],
+    ) -> Result<Vec<Quote>, Self::Error> {
         self.fetch_quotes(coin, currencies).await
     }
 }
