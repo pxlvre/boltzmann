@@ -6,8 +6,8 @@
 //! # Examples
 //!
 //! ```rust
-//! use boltzmann::coins::{Coin, Currency, PriceProvider};
-//! use boltzmann::coins::coinmarketcap::CoinMarketCap;
+//! use boltzmann::crypto::{Coin, Currency, PriceProvider};
+//! use boltzmann::crypto::coinmarketcap::CoinMarketCap;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let provider = CoinMarketCap::new()?;
@@ -90,7 +90,7 @@ impl Currency {
     /// # Examples
     ///
     /// ```rust
-    /// use boltzmann::coins::Currency;
+    /// use boltzmann::crypto::Currency;
     ///
     /// assert_eq!(Currency::USD.symbol(), "$");
     /// assert_eq!(Currency::EUR.symbol(), "€");
@@ -141,7 +141,7 @@ impl Coin {
 
     /// Returns all supported cryptocurrencies.
     ///
-    /// This is useful for fetching prices for all available coins.
+    /// This is useful for fetching prices for all available crypto.
     pub fn all() -> &'static [Coin] {
         &[Coin::ETH]
     }
@@ -197,7 +197,7 @@ impl Quote {
     /// # Examples
     ///
     /// ```rust
-    /// use boltzmann::coins::{Quote, QuotePerAmount, Coin, Currency};
+    /// use boltzmann::crypto::{Quote, QuotePerAmount, Coin, Currency};
     /// use chrono::Utc;
     ///
     /// let quote = Quote {
@@ -235,8 +235,8 @@ impl Quote {
 /// # Examples
 ///
 /// ```rust
-/// use boltzmann::coins::{Coin, Currency, PriceProvider};
-/// use boltzmann::coins::coinmarketcap::CoinMarketCap;
+/// use boltzmann::crypto::{Coin, Currency, PriceProvider};
+/// use boltzmann::crypto::coinmarketcap::CoinMarketCap;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let provider = CoinMarketCap::new()?;

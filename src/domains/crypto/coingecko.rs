@@ -7,8 +7,8 @@
 //! # Examples
 //!
 //! ```rust
-//! use boltzmann::coins::{Coin, Currency};
-//! use boltzmann::coins::coingecko::CoinGecko;
+//! use boltzmann::crypto::{Coin, Currency};
+//! use boltzmann::crypto::coingecko::CoinGecko;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let provider = CoinGecko::new()?;
@@ -19,7 +19,7 @@
 //! # }
 //! ```
 
-use crate::coins::{Coin, Currency, PriceProvider, Quote, QuotePerAmount, ProviderSource};
+use super::{Coin, Currency, PriceProvider, Quote, QuotePerAmount, ProviderSource};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::Value;
@@ -59,7 +59,7 @@ impl std::error::Error for CoinGeckoError {}
 /// # Examples
 ///
 /// ```rust
-/// use boltzmann::coins::coingecko::CoinGecko;
+/// use boltzmann::crypto::coingecko::CoinGecko;
 ///
 /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let provider = CoinGecko::new()?;
@@ -85,7 +85,7 @@ impl CoinGecko {
     /// # Examples
     ///
     /// ```rust
-    /// use boltzmann::coins::coingecko::CoinGecko;
+    /// use boltzmann::crypto::coingecko::CoinGecko;
     ///
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// // Works with or without API key
@@ -93,8 +93,7 @@ impl CoinGecko {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new() -> Result<Self, CoinGeckoError> {
-        let api_key = std::env::var("COINGECKO_API_KEY").ok();
+    pub fn new(api_key: Option<String>) -> Result<Self, CoinGeckoError> {
 
         let mut headers = reqwest::header::HeaderMap::new();
         if let Some(ref key) = api_key {

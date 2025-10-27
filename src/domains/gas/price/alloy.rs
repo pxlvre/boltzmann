@@ -3,7 +3,7 @@
 //! This module implements gas price fetching using alloy-rs built-in functions
 //! to connect directly to Ethereum nodes.
 
-use crate::gas::price::{GasOracle, GasPrice};
+use super::{GasOracle, GasPrice};
 use alloy_provider::{Provider, ProviderBuilder};
 use alloy_rpc_types::FeeHistory;
 use async_trait::async_trait;
@@ -39,24 +39,23 @@ pub struct AlloyGasOracle {
 }
 
 impl AlloyGasOracle {
-    /// Creates a new Alloy gas oracle instance.
+    /// Creates a new Alloy gas oracle instance with the provided RPC URL.
     ///
-    /// Requires the ETHEREUM_RPC_URL environment variable to be set.
+    /// # Arguments
+    ///
+    /// * `rpc_url` - The Ethereum RPC URL to connect to
     ///
     /// # Errors
     ///
-    /// Returns `AlloyError::MissingRpcUrl` if the RPC URL is not found.
-    pub fn new() -> Result<Self, AlloyError> {
-        let rpc_url = std::env::var("ETHEREUM_RPC_URL")
-            .map_err(|_| AlloyError::MissingRpcUrl)?;
+    /// Returns `AlloyError::MissingRpcUrl` if the RPC URL is empty.
+    pub fn new(rpc_url: String) -> Result<Self, AlloyError> {
+        if rpc_url.is_empty() {
+            return Err(AlloyError::MissingRpcUrl);
+        }
 
         Ok(Self { rpc_url })
     }
 
-    /// Creates a new Alloy gas oracle with a custom RPC URL.
-    pub fn with_rpc_url(rpc_url: String) -> Self {
-        Self { rpc_url }
-    }
 
     /// Calculates gas price percentiles from fee history
     fn calculate_gas_prices(&self, fee_history: &FeeHistory) -> Result<(f64, f64, f64), AlloyError> {

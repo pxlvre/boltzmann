@@ -2,7 +2,7 @@
 //!
 //! This module implements gas price fetching using the Etherscan Gas Tracker API.
 
-use crate::gas::price::{GasOracle, GasPrice};
+use super::{GasOracle, GasPrice};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
@@ -79,16 +79,19 @@ pub struct EtherscanGasOracle {
 }
 
 impl EtherscanGasOracle {
-    /// Creates a new Etherscan gas oracle instance.
+    /// Creates a new Etherscan gas oracle instance with the provided API key.
     ///
-    /// Requires the ETHERSCAN_API_KEY environment variable to be set.
+    /// # Arguments
+    ///
+    /// * `api_key` - The Etherscan API key to use for requests
     ///
     /// # Errors
     ///
-    /// Returns `EtherscanError::MissingApiKey` if the API key is not found.
-    pub fn new() -> Result<Self, EtherscanError> {
-        let api_key = std::env::var("ETHERSCAN_API_KEY")
-            .map_err(|_| EtherscanError::MissingApiKey)?;
+    /// Returns `EtherscanError::MissingApiKey` if the API key is empty.
+    pub fn new(api_key: String) -> Result<Self, EtherscanError> {
+        if api_key.is_empty() {
+            return Err(EtherscanError::MissingApiKey);
+        }
 
         Ok(Self {
             client: Client::new(),
@@ -97,14 +100,6 @@ impl EtherscanGasOracle {
         })
     }
 
-    /// Creates a new Etherscan gas oracle with a custom API key.
-    pub fn with_api_key(api_key: String) -> Self {
-        Self {
-            client: Client::new(),
-            api_key,
-            base_url: "https://api.etherscan.io/v2/api".to_string(),
-        }
-    }
 }
 
 #[async_trait]

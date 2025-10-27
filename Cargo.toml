@@ -17,8 +17,6 @@ anyhow = "1.0.100"
 dotenvy = "0.15.7"
 chrono = { version = "0.4.42", features = ["serde"] }
 async-trait = "0.1.89"
-
-# Web framework (for future API)
 axum = "0.8.6"
 tower = "0.5.2"
 tower-http = { version = "0.6.2", features = ["cors"] }
@@ -27,7 +25,7 @@ tower-http = { version = "0.6.2", features = ["cors"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 
-# Blockchain (for future features)
+# Blockchain
 alloy-primitives = "1.4.1"
 alloy-provider = "1.0.41"
 alloy-rpc-types = "1.0.41"

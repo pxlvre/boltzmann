@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  boltzmann-api:
+    build: .
+    container_name: boltzmann
+    ports:
+      - "3000:3000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3000
+      # Add your API keys here or use .env file
+      - COINMARKETCAP_API_KEY=${COINMARKETCAP_API_KEY}
+      - COINGECKO_API_KEY=${COINGECKO_API_KEY}
+      - ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY}
+      - ETHEREUM_RPC_URL=${ETHEREUM_RPC_URL}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - boltzmann-network
+
+networks:
+  boltzmann-network:
+    driver: bridge

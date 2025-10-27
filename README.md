@@ -24,17 +24,39 @@ Boltzmann is a REST API built with **Rust**, **axum**, and **alloy-rs** that pro
 -  **Historical Analytics**: Track gas price trends and optimize transaction timing
 -  **Multi-Chain Support**: Works across all EVM-compatible networks
 
-## Architecture
+## 🏗️ Architecture
 
-Boltzmann is a single Rust application with a modular design:
+Boltzmann follows a **domain-driven design** with a modular Rust architecture:
 
 ```
 boltzmann/
 ├── src/
-│   └── main.rs                  # Main application
-├── assets/                      # Project assets
-├── Cargo.toml                   # Package configuration
-├── .env                         # Environment variables
+│   ├── domains/                 # Business logic domains
+│   │   ├── crypto/             # Cryptocurrency price providers
+│   │   │   ├── coingecko.rs    # CoinGecko integration
+│   │   │   ├── coinmarketcap.rs # CoinMarketCap integration  
+│   │   │   └── mod.rs          # Core crypto types
+│   │   └── gas/                # Gas price oracles
+│   │       └── price/          # Gas price providers
+│   │           ├── etherscan.rs # Etherscan gas oracle
+│   │           ├── alloy.rs    # Alloy RPC gas oracle
+│   │           └── mod.rs      # Gas oracle types
+│   ├── api/                    # HTTP layer
+│   │   └── routes/             # API route handlers
+│   │       ├── crypto.rs       # Crypto price endpoints
+│   │       ├── gas.rs          # Gas price endpoints
+│   │       └── mod.rs          # Router setup
+│   ├── core/                   # Core application
+│   │   ├── config.rs           # Configuration management
+│   │   ├── server.rs           # Server initialization
+│   │   └── mod.rs              # Core module root
+│   ├── main.rs                 # Application entry point
+│   └── lib.rs                  # Library root
+├── assets/                     # Project assets
+├── Dockerfile                  # Docker configuration
+├── docker-compose.yml          # Docker Compose setup
+├── Cargo.toml                  # Package configuration
+├── .env                        # Environment variables
 └── README.md
 ```
 
@@ -51,222 +73,252 @@ boltzmann/
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## API Endpoints
+## 📡 API Endpoints
 
-### Transaction Simulation
+### Health Check
 
-#### `POST /v1/simulate`
-Simulate a transaction and get gas cost estimates across different priority levels.
-
-```json
-{
-  "to": "0x742d35Cc6226926Ac52245b98eaA23Ca95E6A925",
-  "value": "1000000000000000000",
-  "data": "0x",
-  "chain_id": 1,
-  "from": "0x8ba1f109551bD432803012645Hac136c86c0A1B8",
-  "priority_levels": ["slow", "standard", "fast"],
-  "currency": "USD"
-}
-```
+#### `GET /api/v1/health`
+Check if the API server is running.
 
 **Response:**
-```json
-{
-  "simulation_id": "sim_1234567890",
-  "estimates": {
-    "slow": {
-      "gas_price": "15000000000",
-      "gas_limit": "21000",
-      "total_fee_eth": "0.000315",
-      "total_fee_fiat": "0.52",
-      "confirmation_time_seconds": 300
-    },
-    "standard": {
-      "gas_price": "20000000000",
-      "gas_limit": "21000", 
-      "total_fee_eth": "0.00042",
-      "total_fee_fiat": "0.69",
-      "confirmation_time_seconds": 60
-    },
-    "fast": {
-      "gas_price": "30000000000",
-      "gas_limit": "21000",
-      "total_fee_eth": "0.00063", 
-      "total_fee_fiat": "1.04",
-      "confirmation_time_seconds": 15
-    }
-  },
-  "timestamp": "2024-10-23T15:30:00Z",
-  "chain_id": 1
-}
+```
+Boltzmann API is running
 ```
 
-#### `POST /v1/simulate/batch`
-Simulate multiple transactions in a single request.
+### Cryptocurrency Prices
 
-#### `GET /v1/simulate/{simulation_id}`
-Retrieve details of a previous simulation.
+#### `GET /api/v1/price/prices`
+Get current ETH prices from multiple providers.
 
-### Gas Price Oracle
+**Query Parameters:**
+- `amount` (optional): Number of ETH tokens (default: 1)
+- `currency` (optional): Target currency - USD, EUR, CHF, CNY, GBP, JPY, CAD, AUD (default: USD)
 
-#### `GET /v1/gas/current`
-Get current gas prices across all supported priority levels.
-
-```json
-{
-  "chain_id": 1,
-  "base_fee": "12000000000",
-  "priority_fees": {
-    "slow": "1000000000",
-    "standard": "2000000000", 
-    "fast": "5000000000"
-  },
-  "blob_base_fee": "1000000000",
-  "timestamp": "2024-10-23T15:30:00Z"
-}
+**Example:**
+```bash
+curl "http://localhost:3000/api/v1/price/prices?amount=5&currency=EUR"
 ```
 
-### Subscriptions
+### Gas Price Estimates
 
-#### `POST /v1/subscriptions`
-Create a subscription to monitor gas costs for specific transactions.
+#### `GET /api/v1/gas/prices`  
+Get current Ethereum gas price estimates.
 
-```json
-{
-  "name": "Daily DEX Trade Monitor",
-  "transaction_template": {
-    "to": "0x1f98431c8ad98523631ae4a59f267346ea31f984",
-    "data": "0x...",
-    "value": "0"
-  },
-  "interval": {
-    "type": "time",
-    "seconds": 3600
-  },
-  "currency": "USD",
-  "webhooks": ["https://api.myapp.com/gas-updates"]
-}
+**Query Parameters:**
+- `provider` (optional): Gas oracle provider - "etherscan" or "alloy" (default: etherscan)
+
+**Example:**
+```bash
+curl "http://localhost:3000/api/v1/gas/prices?provider=alloy"
 ```
 
-#### `GET /v1/subscriptions`
-List all active subscriptions.
+### Legacy Endpoints (Deprecated but Supported)
 
-#### `GET /v1/subscriptions/{subscription_id}`
-Get subscription details and recent updates.
+#### `GET /quotes`
+Legacy cryptocurrency price endpoint.
 
-#### `DELETE /v1/subscriptions/{subscription_id}`
-Cancel a subscription.
+#### `GET /gas-price`  
+Legacy gas price endpoint.
 
-### Pricing
+---
 
-#### `GET /v1/pricing/rates`
-Get current ETH exchange rates for supported fiat currencies.
+## 🚧 Planned Features (Coming Soon)
 
-#### `POST /v1/pricing/convert`
-Convert between ETH and fiat currencies.
+The following advanced features are planned for future releases:
+
+- **Transaction Simulation**: `POST /api/v1/simulate` - Simulate EVM transactions
+- **Batch Operations**: `POST /api/v1/simulate/batch` - Multiple transaction simulation
+- **Subscriptions**: Real-time monitoring with webhooks
+- **Historical Data**: Gas price trends and analytics
+- **Multi-Chain**: Support for Polygon, Arbitrum, and other EVM chains
 
 ## 🛠️ Installation & Setup
 
 ### Prerequisites
 
-- Rust 1.70+
-- PostgreSQL 13+ (for subscription storage)
-- Redis (for caching)
+- **Docker & Docker Compose** (recommended)
+- **OR** Rust 1.75+ for local development
 
-### Quick Start
+### 🐳 Quick Start with Docker (Recommended)
 
 ```bash
 # Clone the repository
 git clone https://github.com/pxlvre/boltzmann.git
 cd boltzmann
 
-# Copy environment template
+# Create environment file from template
 cp .env.example .env
 
-# Configure your environment variables
-# - RPC endpoints for supported chains
-# - CoinGecko/CoinMarketCap API keys
-# - Database connections
+# Edit .env with your API keys (see Configuration section below)
+vim .env
+
+# Start with Docker Compose
+docker-compose up -d
+
+# Check if it's running
+curl http://localhost:3000/api/v1/health
+```
+
+### 🦀 Local Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/pxlvre/boltzmann.git
+cd boltzmann
+
+# Create environment file
+cp .env.example .env
+
+# Configure your environment variables (see below)
+vim .env
 
 # Build and run
 cargo build --release
 cargo run
 ```
 
-### Docker
+### 🐳 Docker Commands
 
 ```bash
-docker build -t boltzmann .
-docker run -p 8080:8080 --env-file .env boltzmann
+# Build the image
+docker build -t boltzmann-api .
+
+# Run with Docker Compose (recommended)
+docker-compose up -d
+
+# Run standalone container
+docker run -p 3000:3000 \
+  -e COINMARKETCAP_API_KEY=your_key \
+  -e COINGECKO_API_KEY=your_key \
+  -e ETHERSCAN_API_KEY=your_key \
+  -e ETHEREUM_RPC_URL=your_rpc_url \
+  boltzmann-api
+
+# View logs
+docker-compose logs -f boltzmann-api
+
+# Stop services
+docker-compose down
 ```
 
-### Configuration
+### ⚙️ Configuration
 
-Key environment variables:
+Create a `.env` file with the following environment variables:
 
 ```env
-# Server
-PORT=8080
-HOST=0.0.0.0
+# Server Configuration
+HOST=127.0.0.1         # Use 0.0.0.0 for Docker
+PORT=3000
 
-# Database
-DATABASE_URL=postgresql://user:pass@localhost/boltzmann
-REDIS_URL=redis://localhost:6379
+# API Keys (at least one price provider required)
+COINMARKETCAP_API_KEY=your-coinmarketcap-key    # Get from: https://coinmarketcap.com/api/
+COINGECKO_API_KEY=your-coingecko-key           # Get from: https://www.coingecko.com/en/api
 
-# RPC Endpoints
-ETHEREUM_RPC_URL=https://eth-mainnet.alchemyapi.io/v2/your-key
-POLYGON_RPC_URL=https://polygon-rpc.com
-ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
-
-# Pricing APIs
-COINGECKO_API_KEY=your-coingecko-key
-COINMARKETCAP_API_KEY=your-cmc-key
-
-# Rate Limiting
-RATE_LIMIT_PER_MINUTE=100
+# Gas Price Providers
+ETHERSCAN_API_KEY=your-etherscan-key           # Optional - Get from: https://etherscan.io/apis
+ETHEREUM_RPC_URL=your-rpc-url                  # Required - Get from Infura, Alchemy, etc.
 ```
 
-## Usage Examples
+**Required Configuration:**
+- At least **one** of `COINMARKETCAP_API_KEY` or `COINGECKO_API_KEY`
+- `ETHEREUM_RPC_URL` for gas price functionality
 
-### Basic Transaction Cost Check
+**Getting API Keys:**
+- **CoinMarketCap**: [https://coinmarketcap.com/api/](https://coinmarketcap.com/api/) (free tier available)
+- **CoinGecko**: [https://www.coingecko.com/en/api](https://www.coingecko.com/en/api) (free tier available)
+- **Etherscan**: [https://etherscan.io/apis](https://etherscan.io/apis) (optional, free tier available)
+- **Ethereum RPC**: [Infura](https://infura.io/), [Alchemy](https://www.alchemy.com/), or any Ethereum JSON-RPC endpoint
+
+## 🚀 API Usage Examples
+
+### Health Check
 
 ```bash
-curl -X POST http://localhost:8080/v1/simulate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "to": "0x742d35Cc6226926Ac52245b98eaA23Ca95E6A925",
-    "value": "1000000000000000000",
-    "chain_id": 1,
-    "currency": "USD"
-  }'
+curl http://localhost:3000/api/v1/health
 ```
 
-### Monitor Uniswap V3 Swap Costs
+### Get Cryptocurrency Prices
 
 ```bash
-curl -X POST http://localhost:8080/v1/subscriptions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "USDC->ETH Swap Monitor",
-    "transaction_template": {
-      "to": "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
-      "data": "0x414bf389...",
-      "value": "0"
+# Get 1 ETH price in USD (default)
+curl http://localhost:3000/api/v1/price/prices
+
+# Get 5 ETH price in EUR
+curl "http://localhost:3000/api/v1/price/prices?amount=5&currency=EUR"
+
+# Legacy endpoint (still supported)
+curl "http://localhost:3000/quotes?amount=3&currency=CHF"
+```
+
+**Response:**
+```json
+[
+  {
+    "coin": "ETH",
+    "currency": "USD", 
+    "price": 4164.82,
+    "provider": "coinmarketcap",
+    "quote_per_amount": {
+      "amount": 1.0,
+      "total_price": 4164.82
     },
-    "interval": {
-      "type": "blocks",
-      "count": 10
+    "timestamp": "2025-10-27T15:30:00Z"
+  },
+  {
+    "coin": "ETH",
+    "currency": "USD",
+    "price": 4162.15,
+    "provider": "coingecko", 
+    "quote_per_amount": {
+      "amount": 1.0,
+      "total_price": 4162.15
     },
-    "currency": "USD"
-  }'
+    "timestamp": "2025-10-27T15:30:00Z"
+  }
+]
 ```
 
-### Check Current Gas Prices
+### Get Gas Price Estimates
 
 ```bash
-curl http://localhost:8080/v1/gas/current?chain_id=1
+# Get gas prices from Etherscan (default)
+curl http://localhost:3000/api/v1/gas/prices
+
+# Get gas prices from Alloy RPC 
+curl "http://localhost:3000/api/v1/gas/prices?provider=alloy"
+
+# Legacy endpoint (still supported)
+curl "http://localhost:3000/gas-price?provider=etherscan"
 ```
+
+**Response:**
+```json
+{
+  "gas_price": {
+    "low": 2.361777,
+    "average": 2.402917,
+    "high": 2.798484,
+    "timestamp": "2025-10-27T15:30:00Z"
+  },
+  "provider": "etherscan"
+}
+```
+
+### Supported Currencies
+
+- **USD** - US Dollar
+- **EUR** - Euro  
+- **CHF** - Swiss Franc
+- **CNY** - Chinese Yuan
+- **GBP** - British Pound
+- **JPY** - Japanese Yen
+- **CAD** - Canadian Dollar
+- **AUD** - Australian Dollar
+
+### Supported Gas Providers
+
+- **etherscan** - Etherscan Gas Tracker API (default)
+- **alloy** - Direct Ethereum RPC via Alloy
 
 ## Development
 

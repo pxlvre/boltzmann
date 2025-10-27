@@ -7,8 +7,8 @@
 //! # Examples
 //!
 //! ```rust
-//! use boltzmann::coins::{Coin, Currency};
-//! use boltzmann::coins::coinmarketcap::CoinMarketCap;
+//! use boltzmann::crypto::{Coin, Currency};
+//! use boltzmann::crypto::coinmarketcap::CoinMarketCap;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let provider = CoinMarketCap::new()?;
@@ -19,12 +19,10 @@
 //! # }
 //! ```
 
-use crate::coins::{Coin, Currency, PriceProvider, Quote, QuotePerAmount, ProviderSource};
+use super::{Coin, Currency, PriceProvider, Quote, QuotePerAmount, ProviderSource};
 use async_trait::async_trait;
-use dotenvy::dotenv;
 use reqwest::Client;
 use serde_json::Value;
-use std::env;
 
 /// Error types that can occur when using the CoinMarketCap provider.
 #[derive(Debug)]
@@ -60,7 +58,7 @@ impl std::error::Error for CoinMarketCapError {}
 /// # Examples
 ///
 /// ```rust
-/// use boltzmann::coins::coinmarketcap::CoinMarketCap;
+/// use boltzmann::crypto::coinmarketcap::CoinMarketCap;
 ///
 /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let provider = CoinMarketCap::new()?;
@@ -87,19 +85,17 @@ impl CoinMarketCap {
     /// # Examples
     ///
     /// ```rust
-    /// use boltzmann::coins::coinmarketcap::CoinMarketCap;
+    /// use boltzmann::crypto::coinmarketcap::CoinMarketCap;
     ///
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// let provider = CoinMarketCap::new()?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new() -> Result<Self, CoinMarketCapError> {
-        dotenv().ok();
-
-        let api_key = env::var("COINMARKETCAP_API_KEY").map_err(|_| {
-            CoinMarketCapError::EnvError("COINMARKETCAP_API_KEY not set in environment".to_string())
-        })?;
+    pub fn new(api_key: String) -> Result<Self, CoinMarketCapError> {
+        if api_key.is_empty() {
+            return Err(CoinMarketCapError::EnvError("CoinMarketCap API key cannot be empty".to_string()));
+        }
 
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
