@@ -4,34 +4,12 @@
 //! to connect directly to Ethereum nodes.
 
 use super::{GasOracle, GasPrice};
+use crate::core::errors::{Result, ErrorContext};
 use alloy_provider::{Provider, ProviderBuilder};
 use alloy_rpc_types::FeeHistory;
 use async_trait::async_trait;
-use std::error::Error as StdError;
-use std::fmt;
+use anyhow::Context;
 
-/// Alloy provider error types
-#[derive(Debug)]
-pub enum AlloyError {
-    /// Provider connection error
-    ProviderError(String),
-    /// Gas price calculation error
-    CalculationError(String),
-    /// Missing RPC URL
-    MissingRpcUrl,
-}
-
-impl fmt::Display for AlloyError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AlloyError::ProviderError(e) => write!(f, "Provider error: {}", e),
-            AlloyError::CalculationError(e) => write!(f, "Calculation error: {}", e),
-            AlloyError::MissingRpcUrl => write!(f, "Missing ETHEREUM_RPC_URL environment variable"),
-        }
-    }
-}
-
-impl StdError for AlloyError {}
 
 /// Alloy gas price provider using direct Ethereum node connection
 pub struct AlloyGasOracle {
@@ -48,9 +26,9 @@ impl AlloyGasOracle {
     /// # Errors
     ///
     /// Returns `AlloyError::MissingRpcUrl` if the RPC URL is empty.
-    pub fn new(rpc_url: String) -> Result<Self, AlloyError> {
+    pub fn new(rpc_url: String) -> Result<Self> {
         if rpc_url.is_empty() {
-            return Err(AlloyError::MissingRpcUrl);
+            anyhow::bail!("Ethereum RPC URL cannot be empty");
         }
 
         Ok(Self { rpc_url })
@@ -58,17 +36,17 @@ impl AlloyGasOracle {
 
 
     /// Calculates gas price percentiles from fee history
-    fn calculate_gas_prices(&self, fee_history: &FeeHistory) -> Result<(f64, f64, f64), AlloyError> {
+    fn calculate_gas_prices(&self, fee_history: &FeeHistory) -> Result<(f64, f64, f64)> {
         println!("💰 Calculating gas prices from fee history...");
         
         if fee_history.base_fee_per_gas.is_empty() {
-            return Err(AlloyError::CalculationError("No base fee data available".to_string()));
+            anyhow::bail!("No base fee data available in fee history");
         }
 
         // Get the latest base fee
         let latest_base_fee = fee_history.base_fee_per_gas
             .last()
-            .ok_or_else(|| AlloyError::CalculationError("No base fee available".to_string()))?;
+            .context("No base fee available in fee history")?;
 
         println!("⛽ Latest base fee: {} wei", latest_base_fee);
 
@@ -123,14 +101,13 @@ impl AlloyGasOracle {
 
 #[async_trait]
 impl GasOracle for AlloyGasOracle {
-    type Error = AlloyError;
+    type Error = anyhow::Error;
 
-    async fn get_gas_prices(&self) -> Result<GasPrice, Self::Error> {
+    async fn get_gas_prices(&self) -> std::result::Result<GasPrice, Self::Error> {
         // Parse RPC URL
         println!("🔗 Alloy RPC URL: {}", self.rpc_url);
-        let url = self.rpc_url.parse().map_err(|e| {
-            AlloyError::ProviderError(format!("Invalid RPC URL: {}", e))
-        })?;
+        let url = self.rpc_url.parse()
+            .with_context(|| format!("Invalid RPC URL: {}", self.rpc_url))?;
 
         // Create provider
         println!("🔌 Creating Alloy provider...");
@@ -141,7 +118,7 @@ impl GasOracle for AlloyGasOracle {
         let fee_history = provider
             .get_fee_history(20, alloy_rpc_types::BlockNumberOrTag::Latest, &[25.0, 50.0, 75.0])
             .await
-            .map_err(|e| AlloyError::ProviderError(format!("Failed to get fee history: {}", e)))?;
+            .gas_context("fetching fee history from Ethereum node")?;
 
         println!("📈 Fee history received: {} base fees, {} reward entries", 
             fee_history.base_fee_per_gas.len(),

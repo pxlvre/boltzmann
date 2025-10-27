@@ -20,35 +20,12 @@
 //! ```
 
 use super::{Coin, Currency, PriceProvider, Quote, QuotePerAmount, ProviderSource};
+use crate::core::errors::{Result, ErrorContext};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::Value;
+use anyhow::Context;
 
-/// Error types that can occur when using the CoinGecko provider.
-#[derive(Debug)]
-pub enum CoinGeckoError {
-    /// API returned an error or unexpected response format
-    ApiError(String),
-    /// HTTP request failed (network, timeout, etc.)
-    RequestError(reqwest::Error),
-    /// Failed to parse JSON response
-    ParseError(serde_json::Error),
-    /// Rate limit exceeded (HTTP 429)
-    RateLimitError,
-}
-
-impl std::fmt::Display for CoinGeckoError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CoinGeckoError::ApiError(msg) => write!(f, "API Error: {}", msg),
-            CoinGeckoError::RequestError(e) => write!(f, "Request Error: {}", e),
-            CoinGeckoError::ParseError(e) => write!(f, "Parse Error: {}", e),
-            CoinGeckoError::RateLimitError => write!(f, "Rate limit exceeded"),
-        }
-    }
-}
-
-impl std::error::Error for CoinGeckoError {}
 
 /// CoinGecko price provider.
 ///
@@ -93,21 +70,21 @@ impl CoinGecko {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(api_key: Option<String>) -> Result<Self, CoinGeckoError> {
+    pub fn new(api_key: Option<String>) -> Result<Self> {
 
         let mut headers = reqwest::header::HeaderMap::new();
         if let Some(ref key) = api_key {
             headers.insert(
                 "x-cg-demo-api-key",
                 reqwest::header::HeaderValue::from_str(key)
-                    .map_err(|_| CoinGeckoError::ApiError("Invalid API key format".to_string()))?,
+                    .context("Invalid CoinGecko API key format")?,
             );
         }
 
         let client = Client::builder()
             .default_headers(headers)
             .build()
-            .map_err(CoinGeckoError::RequestError)?;
+            .crypto_context("creating HTTP client for CoinGecko")?;
 
         Ok(Self { client, api_key })
     }
@@ -150,7 +127,7 @@ impl CoinGecko {
         &self,
         coin: Coin,
         currencies: &[Currency],
-    ) -> Result<Vec<Quote>, CoinGeckoError> {
+    ) -> Result<Vec<Quote>> {
         if currencies.is_empty() {
             return Ok(Vec::new());
         }
@@ -177,18 +154,19 @@ impl CoinGecko {
         let response = request
             .send()
             .await
-            .map_err(CoinGeckoError::RequestError)?;
+            .crypto_context("sending request to CoinGecko API")?;
 
         if response.status() == 429 {
-            return Err(CoinGeckoError::RateLimitError);
+            anyhow::bail!("CoinGecko API rate limit exceeded");
         }
 
         let body = response
             .text()
             .await
-            .map_err(CoinGeckoError::RequestError)?;
+            .crypto_context("reading response body from CoinGecko API")?;
 
-        let json: Value = serde_json::from_str(&body).map_err(CoinGeckoError::ParseError)?;
+        let json: Value = serde_json::from_str(&body)
+            .context("parsing JSON response from CoinGecko API")?;
 
         let mut quotes = Vec::new();
         let timestamp = chrono::Utc::now();
@@ -196,10 +174,7 @@ impl CoinGecko {
         let coin_data = &json[coin_id];
 
         if coin_data.is_null() {
-            return Err(CoinGeckoError::ApiError(format!(
-                "No data found for coin {}",
-                coin
-            )));
+            anyhow::bail!("No data found for coin {} in CoinGecko response", coin);
         }
 
         for &currency in currencies {
@@ -218,10 +193,7 @@ impl CoinGecko {
                     },
                 });
             } else {
-                return Err(CoinGeckoError::ApiError(format!(
-                    "Price not found for {} in {}",
-                    coin, currency
-                )));
+                anyhow::bail!("Price not found for {} in {} from CoinGecko", coin, currency);
             }
         }
 
@@ -231,13 +203,13 @@ impl CoinGecko {
 
 #[async_trait]
 impl PriceProvider for CoinGecko {
-    type Error = CoinGeckoError;
+    type Error = anyhow::Error;
 
     async fn get_quotes(
         &self,
         coin: Coin,
         currencies: &[Currency],
-    ) -> Result<Vec<Quote>, Self::Error> {
+    ) -> std::result::Result<Vec<Quote>, Self::Error> {
         self.fetch_quotes(coin, currencies).await
     }
 }

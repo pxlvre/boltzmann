@@ -20,35 +20,12 @@
 //! ```
 
 use super::{Coin, Currency, PriceProvider, Quote, QuotePerAmount, ProviderSource};
+use crate::core::errors::{Result, ErrorContext};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::Value;
+use anyhow::Context;
 
-/// Error types that can occur when using the CoinMarketCap provider.
-#[derive(Debug)]
-pub enum CoinMarketCapError {
-    /// API returned an error or unexpected response format
-    ApiError(String),
-    /// HTTP request failed (network, timeout, etc.)
-    RequestError(reqwest::Error),
-    /// Failed to parse JSON response
-    ParseError(serde_json::Error),
-    /// Environment variable missing or invalid
-    EnvError(String),
-}
-
-impl std::fmt::Display for CoinMarketCapError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CoinMarketCapError::ApiError(msg) => write!(f, "API Error: {}", msg),
-            CoinMarketCapError::RequestError(e) => write!(f, "Request Error: {}", e),
-            CoinMarketCapError::ParseError(e) => write!(f, "Parse Error: {}", e),
-            CoinMarketCapError::EnvError(msg) => write!(f, "Environment Error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for CoinMarketCapError {}
 
 /// CoinMarketCap price provider.
 ///
@@ -79,8 +56,8 @@ impl CoinMarketCap {
     ///
     /// # Errors
     ///
-    /// Returns `CoinMarketCapError::EnvError` if the API key is not set or invalid.
-    /// Returns `CoinMarketCapError::RequestError` if the HTTP client cannot be created.
+    /// Returns an error if the API key is not set or invalid,
+    /// or if the HTTP client cannot be created.
     ///
     /// # Examples
     ///
@@ -88,26 +65,26 @@ impl CoinMarketCap {
     /// use boltzmann::crypto::coinmarketcap::CoinMarketCap;
     ///
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let provider = CoinMarketCap::new()?;
+    /// let provider = CoinMarketCap::new("api_key".to_string())?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(api_key: String) -> Result<Self, CoinMarketCapError> {
+    pub fn new(api_key: String) -> Result<Self> {
         if api_key.is_empty() {
-            return Err(CoinMarketCapError::EnvError("CoinMarketCap API key cannot be empty".to_string()));
+            anyhow::bail!("CoinMarketCap API key cannot be empty");
         }
 
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(
             "X-CMC_PRO_API_KEY",
             reqwest::header::HeaderValue::from_str(&api_key)
-                .map_err(|_| CoinMarketCapError::EnvError("Invalid API key format".to_string()))?,
+                .context("Invalid API key format")?,
         );
 
         let client = Client::builder()
             .default_headers(headers)
             .build()
-            .map_err(CoinMarketCapError::RequestError)?;
+            .crypto_context("creating HTTP client for CoinMarketCap")?;
 
         Ok(Self { api_key, client })
     }
@@ -128,13 +105,12 @@ impl CoinMarketCap {
     ///
     /// # Errors
     ///
-    /// Returns various `CoinMarketCapError` types if the request fails or
-    /// the response cannot be parsed.
+    /// Returns an error if the request fails or the response cannot be parsed.
     async fn fetch_quotes(
         &self,
         coin: Coin,
         currencies: &[Currency],
-    ) -> Result<Vec<Quote>, CoinMarketCapError> {
+    ) -> Result<Vec<Quote>> {
         if currencies.is_empty() {
             return Ok(Vec::new());
         }
@@ -156,14 +132,15 @@ impl CoinMarketCap {
             .get(&url)
             .send()
             .await
-            .map_err(CoinMarketCapError::RequestError)?;
+            .crypto_context("sending request to CoinMarketCap API")?;
 
         let body = response
             .text()
             .await
-            .map_err(CoinMarketCapError::RequestError)?;
+            .crypto_context("reading response body from CoinMarketCap API")?;
 
-        let json: Value = serde_json::from_str(&body).map_err(CoinMarketCapError::ParseError)?;
+        let json: Value = serde_json::from_str(&body)
+            .context("parsing JSON response from CoinMarketCap API")?;
 
         let mut quotes = Vec::new();
         let timestamp = chrono::Utc::now();
@@ -172,10 +149,7 @@ impl CoinMarketCap {
         let coin_data = &json["data"][&coin_id_str];
 
         if coin_data.is_null() {
-            return Err(CoinMarketCapError::ApiError(format!(
-                "No data found for coin {}",
-                coin
-            )));
+            anyhow::bail!("No data found for coin {} in CoinMarketCap response", coin);
         }
 
         for &currency in currencies {
@@ -195,10 +169,7 @@ impl CoinMarketCap {
                     },
                 });
             } else {
-                return Err(CoinMarketCapError::ApiError(format!(
-                    "Price not found for {} in {}",
-                    coin, currency
-                )));
+                anyhow::bail!("Price not found for {} in {} from CoinMarketCap", coin, currency);
             }
         }
 
@@ -208,13 +179,13 @@ impl CoinMarketCap {
 
 #[async_trait]
 impl PriceProvider for CoinMarketCap {
-    type Error = CoinMarketCapError;
+    type Error = anyhow::Error;
 
     async fn get_quotes(
         &self,
         coin: Coin,
         currencies: &[Currency],
-    ) -> Result<Vec<Quote>, Self::Error> {
+    ) -> std::result::Result<Vec<Quote>, Self::Error> {
         self.fetch_quotes(coin, currencies).await
     }
 }

@@ -3,11 +3,12 @@
 //! This module handles the Axum server setup, middleware configuration,
 //! and the main server lifecycle.
 
-use std::error::Error;
 use tokio::net::TcpListener;
-use tracing::{info, error};
+use tracing::info;
 
 use crate::core::config::{Config, AppState};
+use crate::core::errors::Result;
+use anyhow::Context;
 use crate::api::routes;
 use crate::infrastructure::logging;
 
@@ -37,21 +38,16 @@ use crate::infrastructure::logging;
 ///     server::start().await
 /// }
 /// ```
-pub async fn start() -> Result<(), Box<dyn Error>> {
+pub async fn start() -> Result<()> {
     // Initialize structured logging and tracing
     logging::init_default_tracing()
-        .map_err(|e| {
-            eprintln!("Failed to initialize logging: {}", e);
-            e
-        })?;
+        .map_err(|e| anyhow::anyhow!("Failed to initialize logging: {}", e))?;
     
     info!("🔧 Initializing Boltzmann API server");
     
     // Load configuration from environment
-    let config = Config::from_env().map_err(|e| {
-        error!("Failed to load configuration: {}", e);
-        e
-    })?;
+    let config = Config::from_env()
+        .context("loading application configuration")?;
     
     let app_state = AppState::new(config);
     info!("✅ Configuration loaded successfully");
@@ -74,18 +70,14 @@ pub async fn start() -> Result<(), Box<dyn Error>> {
     info!("🚀 Starting Boltzmann API server on {}", bind_addr);
     
     // Bind to the address and start serving
-    let listener = TcpListener::bind(&bind_addr).await.map_err(|e| {
-        error!("Failed to bind to address {}: {}", bind_addr, e);
-        e
-    })?;
+    let listener = TcpListener::bind(&bind_addr).await
+        .with_context(|| format!("binding server to address {}", bind_addr))?;
     
     info!("🌐 Server listening on {}", bind_addr);
     info!("📚 Swagger UI available at: http://{}/docs", bind_addr);
     
-    axum::serve(listener, app.into_make_service()).await.map_err(|e| {
-        error!("Server error: {}", e);
-        e
-    })?;
+    axum::serve(listener, app.into_make_service()).await
+        .context("running HTTP server")?;
 
     Ok(())
 }
@@ -98,7 +90,7 @@ pub async fn start() -> Result<(), Box<dyn Error>> {
 /// # Errors
 ///
 /// Returns configuration errors if environment variables are missing or invalid.
-pub fn create_app_state() -> Result<AppState, Box<dyn Error>> {
+pub fn create_app_state() -> Result<AppState> {
     let config = Config::from_env()?;
     Ok(AppState::new(config))
 }

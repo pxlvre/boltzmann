@@ -3,49 +3,12 @@
 //! This module implements gas price fetching using the Etherscan Gas Tracker API.
 
 use super::{GasOracle, GasPrice};
+use crate::core::errors::{Result, ErrorContext};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
-use std::error::Error as StdError;
-use std::fmt;
+use anyhow::Context;
 
-/// Etherscan API error types
-#[derive(Debug)]
-pub enum EtherscanError {
-    /// HTTP request failed
-    RequestError(reqwest::Error),
-    /// API returned an error response
-    ApiError(String),
-    /// Failed to parse response JSON
-    ParseError(serde_json::Error),
-    /// Missing required environment variable
-    MissingApiKey,
-}
-
-impl fmt::Display for EtherscanError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            EtherscanError::RequestError(e) => write!(f, "Request error: {}", e),
-            EtherscanError::ApiError(msg) => write!(f, "API error: {}", msg),
-            EtherscanError::ParseError(e) => write!(f, "Parse error: {}", e),
-            EtherscanError::MissingApiKey => write!(f, "Missing ETHERSCAN_API_KEY environment variable"),
-        }
-    }
-}
-
-impl StdError for EtherscanError {}
-
-impl From<reqwest::Error> for EtherscanError {
-    fn from(error: reqwest::Error) -> Self {
-        EtherscanError::RequestError(error)
-    }
-}
-
-impl From<serde_json::Error> for EtherscanError {
-    fn from(error: serde_json::Error) -> Self {
-        EtherscanError::ParseError(error)
-    }
-}
 
 /// Etherscan Gas API response structure
 #[derive(Debug, Deserialize)]
@@ -88,9 +51,9 @@ impl EtherscanGasOracle {
     /// # Errors
     ///
     /// Returns `EtherscanError::MissingApiKey` if the API key is empty.
-    pub fn new(api_key: String) -> Result<Self, EtherscanError> {
+    pub fn new(api_key: String) -> Result<Self> {
         if api_key.is_empty() {
-            return Err(EtherscanError::MissingApiKey);
+            anyhow::bail!("Etherscan API key cannot be empty");
         }
 
         Ok(Self {
@@ -104,9 +67,9 @@ impl EtherscanGasOracle {
 
 #[async_trait]
 impl GasOracle for EtherscanGasOracle {
-    type Error = EtherscanError;
+    type Error = anyhow::Error;
 
-    async fn get_gas_prices(&self) -> Result<GasPrice, Self::Error> {
+    async fn get_gas_prices(&self) -> std::result::Result<GasPrice, Self::Error> {
         let url = format!(
             "{}?chainid=1&module=gastracker&action=gasoracle&apikey={}",
             self.base_url, self.api_key
@@ -114,17 +77,20 @@ impl GasOracle for EtherscanGasOracle {
 
         println!("🔗 Etherscan API URL: {}", url);
         
-        let response = self.client.get(&url).send().await?;
-        let body = response.text().await?;
+        let response = self.client.get(&url).send().await
+            .gas_context("sending request to Etherscan API")?;
+        let body = response.text().await
+            .gas_context("reading response body from Etherscan API")?;
         
         println!("📨 Raw API response: {}", body);
         
-        let gas_response: EtherscanGasResponse = serde_json::from_str(&body)?;
+        let gas_response: EtherscanGasResponse = serde_json::from_str(&body)
+            .context("parsing JSON response from Etherscan API")?;
         
         println!("🔍 Parsed response: {:?}", gas_response);
 
         if gas_response.status != "1" {
-            return Err(EtherscanError::ApiError(gas_response.message));
+            anyhow::bail!("Etherscan API error: {}", gas_response.message);
         }
 
         // Parse gas prices from decimal strings to f64 (preserve precision)
@@ -135,15 +101,15 @@ impl GasOracle for EtherscanGasOracle {
         
         let low = gas_response.result.safe_gas_price
             .parse::<f64>()
-            .map_err(|e| EtherscanError::ApiError(format!("Invalid safe gas price '{}': {}", gas_response.result.safe_gas_price, e)))?;
+            .with_context(|| format!("Invalid safe gas price '{}'", gas_response.result.safe_gas_price))?;
 
         let average = gas_response.result.propose_gas_price
             .parse::<f64>()
-            .map_err(|e| EtherscanError::ApiError(format!("Invalid propose gas price '{}': {}", gas_response.result.propose_gas_price, e)))?;
+            .with_context(|| format!("Invalid propose gas price '{}'", gas_response.result.propose_gas_price))?;
 
         let high = gas_response.result.fast_gas_price
             .parse::<f64>()
-            .map_err(|e| EtherscanError::ApiError(format!("Invalid fast gas price '{}': {}", gas_response.result.fast_gas_price, e)))?;
+            .with_context(|| format!("Invalid fast gas price '{}'", gas_response.result.fast_gas_price))?;
             
         println!("✅ Parsed gas prices: low={:.6}, average={:.6}, high={:.6}", low, average, high);
 

@@ -4,6 +4,7 @@
 //! All environment variables are loaded once at startup and stored in the app state.
 
 use std::sync::Arc;
+use anyhow::{anyhow, Context, Result};
 
 /// Application configuration loaded from environment variables
 #[derive(Debug, Clone)]
@@ -27,7 +28,7 @@ impl Config {
     ///
     /// This should be called once at application startup after loading .env files.
     /// Missing optional API keys will result in None values, which providers can handle gracefully.
-    pub fn from_env() -> Result<Self, ConfigError> {
+    pub fn from_env() -> Result<Self> {
         // Load dotenv first
         dotenvy::dotenv().ok();
 
@@ -40,17 +41,31 @@ impl Config {
         let port = std::env::var("PORT")
             .unwrap_or_else(|_| "3000".to_string())
             .parse::<u16>()
-            .map_err(|e| ConfigError::InvalidPort(e.to_string()))?;
+            .context("Invalid port number")?;
 
         // Validate required configuration
         // At least one price provider is required
         if coinmarketcap_api_key.is_none() && coingecko_api_key.is_none() {
-            return Err(ConfigError::NoPriceProvider);
+            return Err(anyhow!(
+                "❌ No price provider configured!\n\n\
+                At least one of the following API keys must be set:\n\
+                • COINMARKETCAP_API_KEY - Get free key at: https://coinmarketcap.com/api/\n\
+                • COINGECKO_API_KEY - Get free key at: https://www.coingecko.com/en/api\n\n\
+                Add one of these to your .env file to continue."
+            ));
         }
 
         // Ethereum RPC URL is required for gas functionality
         if ethereum_rpc_url.is_none() {
-            return Err(ConfigError::MissingEthereumRpc);
+            return Err(anyhow!(
+                "❌ Ethereum RPC URL required!\n\n\
+                The ETHEREUM_RPC_URL environment variable must be set for gas price functionality.\n\
+                You can use:\n\
+                • Infura: https://infura.io/\n\
+                • Alchemy: https://www.alchemy.com/\n\
+                • Or any Ethereum JSON-RPC endpoint\n\n\
+                Add ETHEREUM_RPC_URL to your .env file to continue."
+            ));
         }
 
         println!("🔧 Configuration loaded:");
@@ -72,42 +87,6 @@ impl Config {
     }
 }
 
-/// Configuration loading errors
-#[derive(Debug)]
-pub enum ConfigError {
-    /// Invalid port number
-    InvalidPort(String),
-    /// No price provider configured (need at least CoinMarketCap OR CoinGecko)
-    NoPriceProvider,
-    /// Missing required Ethereum RPC URL
-    MissingEthereumRpc,
-}
-
-impl std::fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ConfigError::InvalidPort(e) => write!(f, "Invalid port number: {}", e),
-            ConfigError::NoPriceProvider => write!(f, 
-                "❌ No price provider configured!\n\n\
-                At least one of the following API keys must be set:\n\
-                • COINMARKETCAP_API_KEY - Get free key at: https://coinmarketcap.com/api/\n\
-                • COINGECKO_API_KEY - Get free key at: https://www.coingecko.com/en/api\n\n\
-                Add one of these to your .env file to continue."
-            ),
-            ConfigError::MissingEthereumRpc => write!(f,
-                "❌ Ethereum RPC URL required!\n\n\
-                The ETHEREUM_RPC_URL environment variable must be set for gas price functionality.\n\
-                You can use:\n\
-                • Infura: https://infura.io/\n\
-                • Alchemy: https://www.alchemy.com/\n\
-                • Or any Ethereum JSON-RPC endpoint\n\n\
-                Add ETHEREUM_RPC_URL to your .env file to continue."
-            ),
-        }
-    }
-}
-
-impl std::error::Error for ConfigError {}
 
 /// Shared application state
 #[derive(Debug, Clone)]

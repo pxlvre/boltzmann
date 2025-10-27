@@ -3,11 +3,12 @@
 //! This module handles requests for cryptocurrency prices from multiple providers.
 //! Supports configurable amounts and currencies with fallback between providers.
 
-use axum::{extract::{Query, State}, response::IntoResponse, http::StatusCode, Json};
+use axum::{extract::{Query, State}, Json};
 use serde::Deserialize;
-use serde_json::Value;
 use utoipa::IntoParams;
 use tracing::{info, warn, error};
+
+use crate::core::errors::AppError;
 
 use crate::core::config::AppState;
 use crate::domains::crypto::{Coin, Currency, PriceProvider, Quote};
@@ -50,7 +51,7 @@ fn default_currency() -> Currency {
 pub async fn get_crypto_prices(
     State(app_state): State<AppState>,
     Query(params): Query<QuoteQueryParams>,
-) -> impl IntoResponse {
+) -> Result<Json<Vec<Quote>>, AppError> {
     info!("💰 Fetching cryptocurrency prices for {} {} in {}", params.amount, Coin::ETH, params.currency);
 
     let mut quotes = Vec::new();
@@ -100,12 +101,9 @@ pub async fn get_crypto_prices(
 
     info!("Price fetching completed. Retrieved {} quotes", quotes.len());
 
-    let result: (StatusCode, Json<Value>) = if quotes.is_empty() {
-        let error_json = serde_json::json!({"error": "No quotes available from any provider"});
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(error_json))
-    } else {
-        (StatusCode::OK, Json(serde_json::to_value(quotes).unwrap_or_default()))
-    };
+    if quotes.is_empty() {
+        return Err(anyhow::anyhow!("No quotes available from any provider").into());
+    }
 
-    result
+    Ok(Json(quotes))
 }

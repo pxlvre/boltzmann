@@ -3,10 +3,12 @@
 //! This module handles requests for Ethereum gas prices from multiple oracle providers.
 //! Supports both Etherscan and Alloy (direct RPC) providers with configurable selection.
 
-use axum::{extract::{Query, State}, response::IntoResponse, http::StatusCode, Json};
+use axum::{extract::{Query, State}, Json};
 use serde::Deserialize;
 use utoipa::IntoParams;
 use tracing::{info, warn, error};
+
+use crate::core::errors::AppError;
 
 use crate::core::config::AppState;
 use crate::domains::gas::price::{GasOracle, GasQuote, GasOracleSource};
@@ -42,7 +44,7 @@ fn default_gas_provider() -> GasOracleSource {
 pub async fn get_gas_estimates(
     State(app_state): State<AppState>,
     Query(params): Query<GasPriceQueryParams>,
-) -> impl IntoResponse {
+) -> Result<Json<GasQuote>, AppError> {
     info!("⛽ Fetching gas prices from {:?} provider", params.provider);
 
     let gas_quote = match params.provider {
@@ -107,10 +109,7 @@ pub async fn get_gas_estimates(
     info!("Gas price fetching completed. Success: {}", gas_quote.is_some());
 
     match gas_quote {
-        Some(quote) => (StatusCode::OK, Json(serde_json::to_value(quote).unwrap_or_default())),
-        None => {
-            let error_json = serde_json::json!({"error": "Failed to fetch gas prices from provider"});
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(error_json))
-        }
+        Some(quote) => Ok(Json(quote)),
+        None => Err(anyhow::anyhow!("Failed to fetch gas prices from provider").into()),
     }
 }

@@ -112,16 +112,6 @@ Get current Ethereum gas price estimates.
 curl "http://localhost:3000/api/v1/gas/prices?provider=alloy"
 ```
 
-### Legacy Endpoints (Deprecated but Supported)
-
-#### `GET /quotes`
-Legacy cryptocurrency price endpoint.
-
-#### `GET /gas-price`  
-Legacy gas price endpoint.
-
----
-
 ## 🚧 Planned Features (Coming Soon)
 
 The following advanced features are planned for future releases:
@@ -245,9 +235,6 @@ curl http://localhost:3000/api/v1/price/prices
 
 # Get 5 ETH price in EUR
 curl "http://localhost:3000/api/v1/price/prices?amount=5&currency=EUR"
-
-# Legacy endpoint (still supported)
-curl "http://localhost:3000/quotes?amount=3&currency=CHF"
 ```
 
 **Response:**
@@ -286,9 +273,6 @@ curl http://localhost:3000/api/v1/gas/prices
 
 # Get gas prices from Alloy RPC 
 curl "http://localhost:3000/api/v1/gas/prices?provider=alloy"
-
-# Legacy endpoint (still supported)
-curl "http://localhost:3000/gas-price?provider=etherscan"
 ```
 
 **Response:**
