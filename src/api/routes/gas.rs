@@ -5,6 +5,7 @@
 
 use axum::{extract::{Query, State}, response::IntoResponse, http::StatusCode, Json};
 use serde::Deserialize;
+use utoipa::IntoParams;
 
 use crate::core::config::AppState;
 use crate::domains::gas::price::{GasOracle, GasQuote, GasOracleSource};
@@ -12,7 +13,7 @@ use crate::domains::gas::price::etherscan::EtherscanGasOracle;
 use crate::domains::gas::price::alloy::AlloyGasOracle;
 
 /// Query parameters for gas price requests.
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
 pub struct GasPriceQueryParams {
     /// Gas oracle provider to use (defaults to Etherscan)
     #[serde(default = "default_gas_provider")]
@@ -27,19 +28,16 @@ fn default_gas_provider() -> GasOracleSource {
 ///
 /// This endpoint fetches gas price estimates from the selected oracle provider
 /// and returns low/average/high recommendations in Gwei.
-///
-/// # Query Parameters
-///
-/// * `provider` - Oracle to use: "etherscan" or "alloy" (default: etherscan)
-///
-/// # Examples
-///
-/// * `/api/v1/gas/estimates` - Get gas prices from Etherscan
-/// * `/api/v1/gas/estimates?provider=alloy` - Get gas prices from Alloy RPC
-///
-/// # Returns
-///
-/// JSON object with gas price quote or error if provider fails.
+#[utoipa::path(
+    get,
+    path = "/api/v1/gas/prices",
+    tag = "gas",
+    params(GasPriceQueryParams),
+    responses(
+        (status = 200, description = "Successful response with gas price estimates", body = GasQuote),
+        (status = 500, description = "Failed to fetch gas prices from provider")
+    )
+)]
 pub async fn get_gas_estimates(
     State(app_state): State<AppState>,
     Query(params): Query<GasPriceQueryParams>,

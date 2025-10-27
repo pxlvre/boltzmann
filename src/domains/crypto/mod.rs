@@ -23,6 +23,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use utoipa::ToSchema;
 
 pub mod coingecko;
 pub mod coinmarketcap;
@@ -31,7 +32,7 @@ pub mod coinmarketcap;
 ///
 /// This enum represents the fiat currencies that can be used to fetch
 /// cryptocurrency prices from supported providers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub enum Currency {
     /// US Dollar
     USD,
@@ -55,7 +56,7 @@ pub enum Currency {
 ///
 /// This enum represents the cryptocurrencies supported by the price providers.
 /// Each coin has corresponding IDs for different API providers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 pub enum Coin {
     /// Ethereum
     ETH,
@@ -148,7 +149,7 @@ impl Coin {
 }
 
 /// Information about a specific amount and its total price
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct QuotePerAmount {
     /// The amount of cryptocurrency
     pub amount: f64,
@@ -157,7 +158,7 @@ pub struct QuotePerAmount {
 }
 
 /// Supported price provider sources
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub enum ProviderSource {
     #[serde(rename = "coinmarketcap")]
     CoinMarketCap,
@@ -168,7 +169,7 @@ pub enum ProviderSource {
 /// A cryptocurrency price quote at a specific point in time.
 ///
 /// Contains the coin, currency, unit price, and quote information for a specific amount.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Quote {
     /// The cryptocurrency being quoted
     pub coin: Coin,

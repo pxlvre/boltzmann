@@ -6,14 +6,15 @@
 use axum::{extract::{Query, State}, response::IntoResponse, http::StatusCode, Json};
 use serde::Deserialize;
 use serde_json::Value;
+use utoipa::IntoParams;
 
 use crate::core::config::AppState;
-use crate::domains::crypto::{Coin, Currency, PriceProvider};
+use crate::domains::crypto::{Coin, Currency, PriceProvider, Quote};
 use crate::domains::crypto::coingecko::CoinGecko;
 use crate::domains::crypto::coinmarketcap::CoinMarketCap;
 
 /// Query parameters for price quote requests.
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
 pub struct QuoteQueryParams {
     /// Number of crypto to get price for (defaults to 1)
     #[serde(default = "default_amount")]
@@ -35,20 +36,16 @@ fn default_currency() -> Currency {
 ///
 /// This endpoint fetches ETH prices from configured providers (CoinMarketCap, CoinGecko)
 /// and returns quotes adjusted for the requested amount and currency.
-///
-/// # Query Parameters
-///
-/// * `amount` - Number of crypto (default: 1)
-/// * `currency` - Target currency (default: USD)
-///
-/// # Examples
-///
-/// * `/api/v1/price/prices` - Get 1 ETH price in USD
-/// * `/api/v1/price/prices?amount=5&currency=EUR` - Get 5 ETH price in EUR
-///
-/// # Returns
-///
-/// JSON array of quote objects or error if no providers are available.
+#[utoipa::path(
+    get,
+    path = "/api/v1/price/prices",
+    tag = "crypto",
+    params(QuoteQueryParams),
+    responses(
+        (status = 200, description = "Successful response with price quotes", body = Vec<Quote>),
+        (status = 500, description = "No quotes available from any provider")
+    )
+)]
 pub async fn get_crypto_prices(
     State(app_state): State<AppState>,
     Query(params): Query<QuoteQueryParams>,

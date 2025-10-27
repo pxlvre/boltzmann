@@ -5,16 +5,20 @@
 
 pub mod crypto;
 pub mod gas;
+mod fees;
+mod subscriptions;
 
 use axum::{Router, routing::get};
 use crate::core::config::AppState;
+use crate::api::docs::swagger;
 
 /// Creates the main application router with all routes configured.
 ///
 /// This function sets up all the API endpoints using clear, RESTful patterns:
 /// - `/api/v1/price/prices` - Cryptocurrency price quotes
-/// - `/api/v1/gas/estimates` - Gas price estimates
+/// - `/api/v1/gas/prices` - Gas price estimates
 /// - `/api/v1/health` - Health check endpoint
+/// - `/docs` - Swagger UI documentation
 ///
 /// # Arguments
 ///
@@ -29,6 +33,8 @@ pub fn create_router(app_state: AppState) -> Router {
         .route("/api/v1/health", get(health_check))
         .route("/api/v1/price/prices", get(crypto::get_crypto_prices))
         .route("/api/v1/gas/prices", get(gas::get_gas_estimates))
+        // Documentation
+        .merge(swagger::swagger_ui())
         // Future endpoints (planned)
         // .route("/api/v1/gas/cost/estimates/native-transfer", get(gas::*))
         // .route("/api/v1/gas/cost/estimates/erc20-transfer", get(gas::*))
@@ -46,8 +52,14 @@ pub fn create_router(app_state: AppState) -> Router {
 }
 
 /// Health check endpoint for monitoring and load balancer probes.
-///
-/// Returns if the API is running
+#[utoipa::path(
+    get,
+    path = "/api/v1/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "API is running", body = String)
+    )
+)]
 async fn health_check() -> &'static str {
     "Boltzmann API is running"
 }

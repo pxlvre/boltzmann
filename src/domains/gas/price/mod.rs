@@ -5,12 +5,13 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 pub mod etherscan;
 pub mod alloy;
 
 /// Gas price categories for different transaction priorities
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct GasPrice {
     /// Low priority gas price (slower confirmation)
     pub low: f64,
@@ -23,7 +24,7 @@ pub struct GasPrice {
 }
 
 /// Gas price provider sources
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub enum GasOracleSource {
     #[serde(rename = "etherscan")]
     Etherscan,
@@ -32,7 +33,7 @@ pub enum GasOracleSource {
 }
 
 /// A gas price quote with provider information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct GasQuote {
     /// The gas prices for different priority levels
     pub gas_price: GasPrice,
